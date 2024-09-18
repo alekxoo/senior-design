@@ -74,6 +74,7 @@ class SiameseNetwork(nn.Module):
 # Instantiate the model
 siamese_model = SiameseNetwork()
 siamese_model.eval()
+
 # Load and preprocess the reference car image
 reference_car = cv2.imread('cybertruck.jpeg')
 reference_car = cv2.resize(reference_car, (224, 224))  # Adjust size as needed
@@ -94,7 +95,7 @@ def compare_car(car_patch):
     with torch.no_grad():
         car_features = siamese_model(car_patch)
     similarity = F.pairwise_distance(reference_features, car_features)
-    
+
     return similarity.item()
 
 def process_frame(frame):
