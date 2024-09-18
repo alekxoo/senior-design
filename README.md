@@ -1,1 +1,1 @@
-# senior_design
+The error suggests that the output size of your convolutional layer doesn't match the input size expected by the fully connected layer. We need to adjust the architecture of the Siamese Network to ensure the dimensions align correctly. Here's an updated version of the Siamese Network class:

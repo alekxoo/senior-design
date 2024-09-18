@@ -1,0 +1,8 @@
+9/18/24
+
+Ensure you have YOLOv5 installed and the model weights available.
+Implement and train your Siamese Network. The one in the code is just a placeholder.
+
+
+This code assumes CPU execution. For the Jetson Nano, you'll want to move computations to the GPU
+and possibly use TensorRT for optimization.
