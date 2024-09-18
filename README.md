@@ -1,4 +1,5 @@
 # senior design
 
+- just make sure to create your own branch when working on the repo
 
-1. Make sure to create your own branch when working on the repo
+![alt text](image.png)
