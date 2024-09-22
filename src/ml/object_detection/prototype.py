@@ -10,12 +10,13 @@ import torch.nn.functional as F
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Navigate up to the parent directory of 'senior-design'
-project_root = os.path.abspath(os.path.join(current_dir, '..', '..', '..'))
+project_root = os.path.abspath(os.path.join(current_dir, '..', '..', '..', '..'))
 
 # Add YOLOv5 to the system path
 yolo_path = os.path.join(project_root, 'yolov5')
 if yolo_path not in sys.path:
     sys.path.append(yolo_path)
+print(yolo_path)
 
 # Now import YOLOv5 modules
 from models.experimental import attempt_load
