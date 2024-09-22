@@ -122,6 +122,6 @@ def classify_query(model, support_imgs, query_img):
         return predicted_class
 
 # Example usage: Classify a new query image
-query_image = transform(Image.open('car_data/query/new_car.jpg')).unsqueeze(0)
+query_image = transform(Image.open('car_data/query/cybertruck.jpeg')).unsqueeze(0)
 predicted_class = classify_query(model, torch.stack([transform(img) for img in support_imgs]), query_image)
 print(f"Predicted Class: {predicted_class.item()}")
