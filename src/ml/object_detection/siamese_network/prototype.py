@@ -1,68 +1,102 @@
 import os
 import sys
+
+# Get the current script's directory
+current_dir = os.path.dirname(os.path.abspath(__file__))
+print(f"Current directory: {current_dir}")
+
+# Navigate up to the directory containing 'senior-design' and 'yolov5'
+project_root = os.path.abspath(os.path.join(current_dir, '..', '..', '..', '..', '..'))
+print(f"Project root directory: {project_root}")
+
+# Add the project root directory and YOLOv5 directory to the Python path
+sys.path.insert(0, project_root)
+yolov5_dir = os.path.join(project_root, 'yolov5')
+sys.path.insert(0, yolov5_dir)
+
+# Print the sys.path for debugging
+print(f"Current sys.path: {sys.path}")
+
+# Print the contents of the YOLOv5 directory
+print(f"Contents of {yolov5_dir}:")
+for item in os.listdir(yolov5_dir):
+    print(f"  {item}")
+
+# Now try to import YOLOv5 modules
+try:
+    from models.experimental import attempt_load
+    from utils.general import non_max_suppression
+    print("Successfully imported YOLOv5 modules.")
+except ImportError as e:
+    print(f"Error: Unable to import YOLOv5 modules. {e}")
+    print("Please ensure YOLOv5 is installed correctly and in the right location.")
+    sys.exit(1)
+
+# Rest of your imports
 import cv2
 import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-
-# Get the absolute path of the current script
-current_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Navigate up to the parent directory of 'senior-design'
-project_root = os.path.abspath(os.path.join(current_dir, '..', '..', '..', '..'))
-
-# Add YOLOv5 to the system path
-yolo_path = os.path.join(project_root, 'yolov5')
-if yolo_path not in sys.path:
-    sys.path.append(yolo_path)
-print(yolo_path)
-
-# Now import YOLOv5 modules
-from models.experimental import attempt_load
-from utils.general import non_max_suppression
+from torchvision import transforms
+from PIL import Image
+import random
 
 # Load YOLOv5 model
-yolo_model = attempt_load('yolov5s.pt')
-yolo_model.eval()
+try:
+    yolo_weights_path = os.path.join(project_root, 'yolov5s.pt')
+    yolo_model = attempt_load(yolo_weights_path)
+    yolo_model.eval()
+    print(f"Successfully loaded YOLOv5 model from {yolo_weights_path}")
+except Exception as e:
+    print(f"Error loading YOLOv5 model: {e}")
+    print(f"Attempted to load weights from: {yolo_weights_path}")
+    sys.exit(1)
 
 class SiameseNetwork(nn.Module):
     def __init__(self):
         super(SiameseNetwork, self).__init__()
         self.cnn1 = nn.Sequential(
-            nn.Conv2d(3, 96, kernel_size=11, stride=4),
+            nn.Conv2d(3, 64, kernel_size=10, stride=1),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(3, stride=2),
+            nn.MaxPool2d(2, stride=2),
             
-            nn.Conv2d(96, 256, kernel_size=5, padding=2),
+            nn.Conv2d(64, 128, kernel_size=7, stride=1),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(3, stride=2),
+            nn.MaxPool2d(2, stride=2),
             
-            nn.Conv2d(256, 384, kernel_size=3, padding=1),
+            nn.Conv2d(128, 128, kernel_size=4, stride=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, stride=2),
+            
+            nn.Conv2d(128, 256, kernel_size=4, stride=1),
             nn.ReLU(inplace=True)
         )
 
-        # Calculate the flattened size
-        self.fc_input_size = 384 * 12 * 12
+        # Calculate the size of the output from the last convolutional layer
+        self.fc_input_dims = self._get_conv_output((3, 224, 224))
 
         self.fc1 = nn.Sequential(
-            nn.Linear(self.fc_input_size, 1024),
+            nn.Linear(self.fc_input_dims, 4096),
             nn.ReLU(inplace=True),
             
-            nn.Linear(1024, 256),
+            nn.Linear(4096, 1024),
             nn.ReLU(inplace=True),
             
-            nn.Linear(256, 2)
+            nn.Linear(1024, 256)
         )
 
+    def _get_conv_output(self, shape):
+        batch_size = 1
+        input = torch.autograd.Variable(torch.rand(batch_size, *shape))
+        output_feat = self.cnn1(input)
+        n_size = output_feat.data.view(batch_size, -1).size(1)
+        return n_size
+
     def forward_once(self, x):
-        print(f"Input shape: {x.shape}")
         output = self.cnn1(x)
-        print(f"After CNN shape: {output.shape}")
         output = output.view(output.size()[0], -1)
-        print(f"After flatten shape: {output.shape}")
         output = self.fc1(output)
-        print(f"Final output shape: {output.shape}")
         return output
 
     def forward(self, input1, input2=None):
@@ -72,41 +106,92 @@ class SiameseNetwork(nn.Module):
             return output1, output2
         return output1
 
-# Instantiate the model
 siamese_model = SiameseNetwork()
-siamese_model.eval()
+siamese_model_path = os.path.join(project_root, 'best_siamese_model.pth')
+try:
+    siamese_model.load_state_dict(torch.load(siamese_model_path))
+    siamese_model.eval()
+    print(f"Successfully loaded Siamese model from {siamese_model_path}")
+except Exception as e:
+    print(f"Error loading Siamese model: {e}")
+    print(f"Attempted to load model from: {siamese_model_path}")
+    sys.exit(1)
 
-# Load and preprocess the reference car image
-reference_car = cv2.imread('cybertruck.jpeg')
-reference_car = cv2.resize(reference_car, (224, 224))  # Adjust size as needed
-reference_car = torch.from_numpy(reference_car).float().permute(2, 0, 1).unsqueeze(0) / 255.0
-with torch.no_grad():
-    reference_features = siamese_model(reference_car)
+# Preprocess function
+def preprocess_image(image):
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+    image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    return transform(image).unsqueeze(0)
+
+# Load and preprocess the reference car images
+reference_cars = {}
+dataset_dir = os.path.join(project_root, 'vehicle_images_vault')
+print(f"Looking for dataset in: {dataset_dir}")
+
+if not os.path.exists(dataset_dir):
+    print(f"Error: Dataset directory not found at {dataset_dir}")
+    sys.exit(1)
+
+# Use a subset of images (e.g., 5 per category) as reference
+for category in os.listdir(dataset_dir):
+    category_dir = os.path.join(dataset_dir, category)
+    if os.path.isdir(category_dir):
+        image_files = [f for f in os.listdir(category_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        selected_images = random.sample(image_files, min(5, len(image_files)))
+        for image_file in selected_images:
+            image_path = os.path.join(category_dir, image_file)
+            car_image = cv2.imread(image_path)
+            if car_image is None:
+                print(f"Warning: Unable to read image {image_path}")
+                continue
+            car_tensor = preprocess_image(car_image)
+            with torch.no_grad():
+                reference_cars[f"{category}_{image_file}"] = siamese_model.forward_once(car_tensor)
+
+print(f"Loaded {len(reference_cars)} reference images.")
 
 def detect_cars(frame):
     img = torch.from_numpy(frame).float().permute(2, 0, 1).unsqueeze(0) / 255.0
+    img = img.to(next(yolo_model.parameters()).device)
+    
     with torch.no_grad():
         pred = yolo_model(img)[0]
-    pred = non_max_suppression(pred, conf_thres=0.25, iou_thres=0.45, classes=[2])  # 2 is the class index for 'car' in COCO
-    return pred[0]
+    
+    # Apply NMS
+    pred = non_max_suppression(pred, conf_thres=0.3, iou_thres=0.45, classes=[2])  # class 2 is typically 'car' in COCO
+    
+    if len(pred) > 0 and len(pred[0]) > 0:
+        return pred[0].cpu().numpy()
+    else:
+        return np.array([])
 
 def compare_car(car_patch):
-    car_patch = cv2.resize(car_patch, (224, 224))  # Resize to match reference image
-    car_patch = torch.from_numpy(car_patch).float().permute(2, 0, 1).unsqueeze(0) / 255.0
+    car_tensor = preprocess_image(car_patch)
     with torch.no_grad():
-        car_features = siamese_model(car_patch)
-    similarity = F.pairwise_distance(reference_features, car_features)
-
-    return similarity.item()
+        car_features = siamese_model(car_tensor)
+    
+    similarities = {}
+    for car_id, ref_features in reference_cars.items():
+        similarity = F.pairwise_distance(ref_features, car_features).item()
+        similarities[car_id] = similarity
+    
+    return min(similarities.items(), key=lambda x: x[1])
 
 def process_frame(frame):
     detections = detect_cars(frame)
-    for *xyxy, conf, cls in detections:
-        car_patch = frame[int(xyxy[1]):int(xyxy[3]), int(xyxy[0]):int(xyxy[2])]
-        similarity = compare_car(car_patch)
-        color = (0, 255, 0) if similarity < 0.5 else (0, 0, 255)  # Green if similar (lower distance), red otherwise
-        cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), color, 2)
-        cv2.putText(frame, f'Car {similarity:.2f}', (int(xyxy[0]), int(xyxy[1])-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+    for det in detections:
+        x1, y1, x2, y2, conf, cls = det
+        car_patch = frame[int(y1):int(y2), int(x1):int(x2)]
+        if car_patch.size == 0:
+            continue
+        car_id, similarity = compare_car(car_patch)
+        color = (0, 255, 0) if similarity < 0.5 else (0, 0, 255)
+        cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+        cv2.putText(frame, f'{car_id}: {similarity:.2f}', (int(x1), int(y1)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
     return frame
 
 def main():
@@ -115,8 +200,12 @@ def main():
         ret, frame = cap.read()
         if not ret:
             break
-        processed_frame = process_frame(frame)
-        cv2.imshow('Frame', processed_frame)
+        try:
+            processed_frame = process_frame(frame)
+            cv2.imshow('Frame', processed_frame)
+        except Exception as e:
+            print(f"Error processing frame: {e}")
+            break
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
     cap.release()
