@@ -37,6 +37,7 @@ class CarDataset(torch.utils.data.Dataset):
         if not all_images:
             raise ValueError("No valid images found in the dataset.")
         
+        # Shuffle and split the dataset
         random.shuffle(all_images)
         n_total = len(all_images)
         n_train = int(self.train_ratio * n_total)
@@ -48,7 +49,7 @@ class CarDataset(torch.utils.data.Dataset):
             return all_images[n_train:n_train+n_val]
         else:  # test
             return all_images[n_train+n_val:]
-
+    
     def __len__(self):
         return len(self.images)
 
@@ -59,20 +60,29 @@ class CarDataset(torch.utils.data.Dataset):
         
         if should_get_same_class:
             same_class_images = [img for img, label in self.images if label == label1]
-            img2_path, _ = random.choice(same_class_images)
+            img2_path = random.choice(same_class_images)[0]  # Select just the path
         else:
             different_class_images = [img for img, label in self.images if label != label1]
-            img2_path, _ = random.choice(different_class_images)
+            img2_path = random.choice(different_class_images)[0]  # Select just the path
+                    
+        # Add error checking
+        if not os.path.isfile(img1_path) or not os.path.isfile(img2_path):
+            print(f"Invalid file path: {img1_path} or {img2_path}")
+            return None  # You might want to handle this in your DataLoader
         
-        img1 = Image.open(img1_path).convert("RGB")
-        img2 = Image.open(img2_path).convert("RGB")
+        try:
+            img1 = Image.open(img1_path).convert("RGB")
+            img2 = Image.open(img2_path).convert("RGB")
+        except Exception as e:
+            print(f"Error opening image: {e}")
+            return None
         
         if self.transform:
             img1 = self.transform(img1)
             img2 = self.transform(img2)
         
         return img1, img2, torch.tensor([int(should_get_same_class)], dtype=torch.float32)
-
+    
 class SiameseNetwork(nn.Module):
     def __init__(self):
         super(SiameseNetwork, self).__init__()
@@ -196,14 +206,18 @@ def main():
     ])
 
     # Datasets and DataLoaders
-    data_dir = '/path/to/your/dataset'  # Update this path
+    data_dir = '/home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault'  # Update this path
     train_dataset = CarDataset(root_dir=data_dir, transform=transform, split='train')
     val_dataset = CarDataset(root_dir=data_dir, transform=transform, split='val')
     test_dataset = CarDataset(root_dir=data_dir, transform=transform, split='test')
     
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    def collate_fn(batch):
+        batch = list(filter(lambda x: x is not None, batch))
+        return torch.utils.data.dataloader.default_collate(batch)
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
 
     # Model, loss function, and optimizer
     model = SiameseNetwork().to(device)
