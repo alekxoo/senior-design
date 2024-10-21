@@ -2,3 +2,4 @@ venv/
 medranovenv/
 .venv/
 aws_credentials.py
+senior-design-workspace.code-workspace
