@@ -1,59 +1,65 @@
-import os
-import random
-from typing import List, Tuple
-
 import torch
-from torch import nn
-from torch.utils.data import Dataset
-from torchvision import transforms
-from torchvision.models import resnet50
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import models, transforms
+import timm
+import os
+from torch.utils.data import Dataset, DataLoader
 from PIL import Image
+import numpy as np
+from rembg import remove
 
 
-class PrototypicalNetworks(nn.Module):
-    def __init__(self, backbone: nn.Module):
-        super(PrototypicalNetworks, self).__init__()
-        self.backbone = backbone
 
-    def forward(
-        self,
-        support_images: torch.Tensor,
-        support_labels: torch.Tensor,
-        query_images: torch.Tensor,
-    ) -> torch.Tensor:
-        z_support = self.backbone.forward(support_images)
-        z_query = self.backbone.forward(query_images)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        n_way = len(torch.unique(support_labels))
-        z_proto = torch.cat(
-            [
-                z_support[torch.nonzero(support_labels == label)].mean(0)
-                for label in range(n_way)
-            ]
-        )
+# # # Function to remove background and save the processed image
+# def remove_background(input_path, output_path):
+#     with open(input_path, 'rb') as i:
+#         with open(output_path, 'wb') as o:
+#             input = i.read()
+#             output = remove(input)
+#             o.write(output)
 
-        dists = torch.cdist(z_query, z_proto)
-        scores = -dists
-        return scores
+# # Process all images in the dataset
+# def process_dataset(input_dir, output_dir):
+#     for item in os.listdir(input_dir):
+#         item_path = os.path.join(input_dir, item)
+#         if os.path.isdir(item_path):
+#             class_input_dir = item_path
+#             class_output_dir = os.path.join(output_dir, item)
+#             os.makedirs(class_output_dir, exist_ok=True)
+            
+#             for image_name in os.listdir(class_input_dir):
+#                 if not image_name.startswith('.'):  # Skip hidden files
+#                     input_path = os.path.join(class_input_dir, image_name)
+#                     output_path = os.path.join(class_output_dir, image_name)
+#                     remove_background(input_path, output_path)
+
+# # Process the dataset
+# input_dir = "../dataset/vehicle_images_vault"
+# output_dir = "../dataset/vehicle_images_altered"
+# process_dataset(input_dir, output_dir)
 
 
 class CustomImageDataset(Dataset):
     def __init__(self, root_dir, transform=None):
         self.root_dir = root_dir
         self.transform = transform
-        self.classes = [d for d in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir, d))]
-        self.class_to_idx = {cls_name: i for i, cls_name in enumerate(self.classes)}
+        self.classes = os.listdir(root_dir)
+        self.class_to_idx = {cls: idx for idx, cls in enumerate(self.classes)}
         self.images = self._load_images()
 
     def _load_images(self):
         images = []
-        valid_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff"}  # Only load valid image files
-        for class_name in self.classes:
-            class_dir = os.path.join(self.root_dir, class_name)
-            for img_name in os.listdir(class_dir):
-                img_path = os.path.join(class_dir, img_name)
-                if os.path.splitext(img_name)[1].lower() in valid_extensions:
-                    images.append((img_path, self.class_to_idx[class_name]))
+        for cls in self.classes:
+            class_path = os.path.join(self.root_dir, cls)
+            if not os.path.isdir(class_path):
+                continue  # Skip non-directory files like .DS_Store
+            for img_name in os.listdir(class_path):
+                img_path = os.path.join(class_path, img_name)
+                if img_name.endswith(('.png', '.jpg', '.jpeg')):
+                    images.append((img_path, self.class_to_idx[cls]))
         return images
 
     def __len__(self):
@@ -62,134 +68,211 @@ class CustomImageDataset(Dataset):
     def __getitem__(self, idx):
         img_path, label = self.images[idx]
         image = Image.open(img_path).convert('RGB')
-
+        
         if self.transform:
             image = self.transform(image)
-
+        
         return image, label
-
-
-def create_episode(dataset: CustomImageDataset, n_way: int, n_shot: int, n_query: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, List[str]]:
-    # Filter classes with enough images
-    valid_classes = [cls for cls in dataset.classes
-                     if len([img for img, img_label in dataset.images if dataset.classes[img_label] == cls]) >= n_shot + n_query]
-
-    if len(valid_classes) < n_way:
-        raise ValueError(f"Not enough classes with {n_shot + n_query} images. Only {len(valid_classes)} valid classes found.")
-
-    classes = random.sample(valid_classes, n_way)
-    support_images = []
-    support_labels = []
-    query_images = []
-    query_labels = []
-
-    for label, class_name in enumerate(classes):
-        class_images = [img for img, img_label in dataset.images if dataset.classes[img_label] == class_name]
-        selected_images = random.sample(class_images, n_shot + n_query)
-
-        for i, img_path in enumerate(selected_images):
-            img = Image.open(img_path).convert('RGB')
-            img = dataset.transform(img)
-
-            if i < n_shot:
-                support_images.append(img)
-                support_labels.append(label)
-            else:
-                query_images.append(img)
-                query_labels.append(label)
-
-    support_images = torch.stack(support_images)
-    support_labels = torch.tensor(support_labels)
-    query_images = torch.stack(query_images)
-    query_labels = torch.tensor(query_labels)
-
-    return support_images, support_labels, query_images, query_labels, classes
-
-
-def predict_new_image(model, new_image_path: str, dataset: CustomImageDataset, support_images: torch.Tensor, support_labels: torch.Tensor, device: torch.device):
-    # Load and preprocess the new image
-    new_image = Image.open(new_image_path).convert('RGB')
-    new_image = dataset.transform(new_image)
-    new_image = new_image.unsqueeze(0).to(device)  # Add batch dimension and move to device
-
-    # Pass support set and the new image (query image) through the model
-    with torch.no_grad():
-        scores = model(support_images, support_labels, new_image)
-        _, predicted_label = torch.max(scores.data, 1)
-
-    predicted_class = dataset.classes[predicted_label.item()]
-    return predicted_class
-
-
-def main(image_folder: str, n_way: int = 5, n_shot: int = 5, n_query: int = 5, n_episodes: int = 100):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-
-    dataset = CustomImageDataset(image_folder, transform=transform)
-
-    # Print dataset statistics
-    print(f"Total number of classes: {len(dataset.classes)}")
-    for cls in dataset.classes:
-        class_images = [img for img, img_label in dataset.images if dataset.classes[img_label] == cls]
-        print(f"Class '{cls}' has {len(class_images)} images")
-
-    convolutional_network = resnet50(pretrained=True)
-    convolutional_network.fc = nn.Flatten()
-    model = PrototypicalNetworks(convolutional_network).to(device)
-    model.eval()
-
-    total_accuracy = 0
-
-    for episode in range(n_episodes):
-        try:
-            support_images, support_labels, query_images, query_labels, episode_classes = create_episode(dataset, n_way, n_shot, n_query)
-        except ValueError as e:
-            print(f"Error creating episode: {e}")
-            print("Try reducing n_way, n_shot, or n_query.")
-            return
-
-        support_images = support_images.to(device)
-        support_labels = support_labels.to(device)
-        query_images = query_images.to(device)
-        query_labels = query_labels.to(device)
-
+    
+class EnhancedPrototypicalNetwork(nn.Module):
+    def __init__(self, embedding_size=512, pretrained=True):
+        super(EnhancedPrototypicalNetwork, self).__init__()
+        
+        # Load pretrained EfficientNetV2 as base model
+        self.base_model = timm.create_model('efficientnetv2_rw_s', pretrained=True)
+        
+        # Get the output features of the model
         with torch.no_grad():
-            scores = model(support_images, support_labels, query_images)
-            _, predicted_labels = torch.max(scores.data, 1)
-            accuracy = (predicted_labels == query_labels).float().mean().item()
-            total_accuracy += accuracy
+            # Create a dummy input to get the output size
+            dummy_input = torch.randn(1, 3, 224, 224)
+            features = self.base_model.forward_features(dummy_input)
+            self.feature_size = features.shape[1] 
+        
+        #reset classifier to impplement our limited classes
+        self.base_model.reset_classifier(0)
+        
+        self.embedding_head = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(self.feature_size, 1024),
+            nn.BatchNorm1d(1024),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.2),
+            nn.Linear(1024, embedding_size),
+            nn.BatchNorm1d(embedding_size)
+        )
+        
+        
+        self.freeze_base_layers()
+        
+    def freeze_base_layers(self):
+        
+        layers_to_freeze = 0
+        for i, (name, param) in enumerate(self.base_model.named_parameters()):
+            if i < layers_to_freeze:
+                param.requires_grad = False
+                
+    def forward(self, x):
+        # pass through base model
+        features = self.base_model.forward_features(x)
+        
+        embeddings = self.embedding_head(features)
+        
+        embeddings = F.normalize(embeddings, p=2, dim=1)
+        
+        return embeddings
 
-        print(f"Episode {episode + 1}/{n_episodes}: Accuracy = {accuracy:.4f}")
+def get_transforms(train=True):
+    if train:
+        return transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomAffine(degrees=10, translate=(0.1, 0.1), scale=(0.9, 1.1)),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+            transforms.RandomAutocontrast(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], 
+                               std=[0.229, 0.224, 0.225])
+        ])
+    else:
+        return transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], 
+                               std=[0.229, 0.224, 0.225])
+        ])
 
-    average_accuracy = total_accuracy / n_episodes
-    print(f"\nAverage accuracy over {n_episodes} episodes: {average_accuracy:.4f}")
 
-    # Test with a new image
-    new_image_path = "car_data/query_set/testChevy.jpg"  # Replace with your actual image path
-    support_images, support_labels, _, _, _ = create_episode(dataset, n_way=n_way, n_shot=n_shot, n_query=n_query)
-    support_images = support_images.to(device)
-    support_labels = support_labels.to(device)
+def create_class_prototypes(model, data_loader, device, temperature=0.1):
+    model.eval()
+    prototypes = []
+    labels_list = []
+    
+    with torch.no_grad():
+        for images, labels in data_loader:
+            images = images.to(device)
+            embeddings = model(images)
+            
+            # averaging of embeddings
+            embeddings = embeddings / temperature
+            
+            for embedding, label in zip(embeddings, labels):
+                if label.item() not in labels_list:
+                    labels_list.append(label.item())
+                    prototypes.append(embedding)
+                else:
+                    idx = labels_list.index(label.item())
+                    # Exponential moving average update
+                    alpha = 0.9
+                    prototypes[idx] = alpha * prototypes[idx] + (1 - alpha) * embedding
+    
+    # Stack and normalize prototypes
+    prototypes = torch.stack(prototypes)
+    prototypes = F.normalize(prototypes, p=2, dim=1)
+    
+    return prototypes, labels_list
 
-    predicted_class = predict_new_image(model, new_image_path, dataset, support_images, support_labels, device)
-    print(f"Predicted class for the new image: {predicted_class}")
+# Updated classification function with cosine similarity
+def classify_query(model, query_image, prototypes, device, temperature=0.1):
+    model.eval()
+    
+    query_image = query_image.unsqueeze(0).to(device)
+    query_embedding = model(query_image)
+    
+    query_embedding = query_embedding / temperature
+    
+    # calc cosine similarity
+    similarities = F.cosine_similarity(
+        query_embedding.unsqueeze(1),
+        prototypes.unsqueeze(0),
+        dim=2
+    )
+    
+    # convert these similarities to probabilities
+    probabilities = F.softmax(similarities, dim=1)
+    
+    predicted_label = probabilities.argmax(dim=1).item()
+    
+    return predicted_label, probabilities.squeeze()
 
+
+def load_and_preprocess_image(image_path, transform):
+    """
+    Load an image from the specified path and apply the provided transform.
+    """
+    image = Image.open(image_path).convert('RGB')
+    image = transform(image)
+    return image
+
+def classify_random_image(model, image_path, prototypes, labels_list, transform, device):
+    """
+    Load a random image, preprocess it, and classify it using the prototypical network.
+    """
+    image = load_and_preprocess_image(image_path, transform)
+    image = image.to(device)  # Move image to device (GPU/CPU) could change later for GPU use with jetson module
+    
+    predicted_label, probabilities = classify_query(model, image, prototypes, device)
+    
+    return predicted_label, probabilities
+
+# Updated main function
+def main():
+    # Set up dataset and data loader with new transforms
+    #do 80/20 split on training/testing data
+    train_transform = get_transforms(train=True)
+    test_transform = get_transforms(train=False)
+    
+    dataset = CustomImageDataset('../dataset/vehicle_images_vault/', 
+                               transform=train_transform)
+    test_dataset = CustomImageDataset('../dataset/vehicle_images_vault/', 
+                                    transform=test_transform)
+    
+    data_loader = DataLoader(dataset, batch_size=32, shuffle=True, 
+                            num_workers=4, pin_memory=True)
+    
+    # Initialize enhanced model
+    model = EnhancedPrototypicalNetwork(embedding_size=512).to(device)
+    
+    # Create prototypes
+    prototypes, labels_list = create_class_prototypes(model, data_loader, 
+                                                    device, temperature=0.1)
+    
+    # Example classification
+    query_image, true_label = test_dataset[0]
+    query_image = query_image.to(device)
+    predicted_label, probabilities = classify_query(model, query_image, 
+                                                 prototypes, device)
+    
+    print(f"True label: {test_dataset.classes[true_label]}")
+    print(f"Predicted label: {test_dataset.classes[labels_list[predicted_label]]}")
+    print("\nClass probabilities:")
+    
+    # Print sorted probabilities
+    probs_dict = {test_dataset.classes[labels_list[i]]: prob.item() 
+                  for i, prob in enumerate(probabilities)}
+    sorted_probs = sorted(probs_dict.items(), key=lambda x: x[1], reverse=True)
+    
+    for class_name, prob in sorted_probs:
+        print(f"  {class_name}: {prob:.4f}")
+
+
+    #upload test image
+    random_image_path = './testBMW.jpg'
+
+    predicted_label, probabilities = classify_random_image(model, random_image_path, prototypes, 
+                                                        labels_list, test_transform, device)
+
+    print(f"\nPredicted label for random image: {dataset.classes[labels_list[predicted_label]]}")
+    print("\nClass probabilities:")
+
+    probs_dict = {dataset.classes[labels_list[i]]: prob.item() 
+                for i, prob in enumerate(probabilities)}
+    sorted_probs = sorted(probs_dict.items(), key=lambda x: x[1], reverse=True)
+
+    for class_name, prob in sorted_probs:
+        print(f"  {class_name}: {prob:.4f}")
 
 if __name__ == "__main__":
-    import argparse
+    main()
 
-    parser = argparse.ArgumentParser(description="Few-shot classification with Prototypical Networks")
-    parser.add_argument("image_folder", type=str, help="Path to the image folder")
-    parser.add_argument("--n_way", type=int, default=5, help="Number of classes per episode")
-    parser.add_argument("--n_shot", type=int, default=3, help="Number of support examples per class")
-    parser.add_argument("--n_query", type=int, default=2, help="Number of query examples per class")
-    parser.add_argument("--n_episodes", type=int, default=10, help="Number of episodes to evaluate")
-
-    args = parser.parse_args()
-
-    main(args.image_folder, args.n_way, args.n_shot, args.n_query, args.n_episodes)
-
+    
