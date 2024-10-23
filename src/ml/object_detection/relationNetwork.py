@@ -17,16 +17,19 @@ train_datagen = ImageDataGenerator(rescale=1./255,
 #load in images from directory with a size of 64x64 pixels, batch size of 16, so 2 batches per epoch (32:16)
 #after loading images from dir, save some images for training and others for validation data
 train_generator = train_datagen.flow_from_directory(
-    "car_data/processed_support_set/",
+    "../dataset/vehicle_images_vault/",
     target_size=(224,224),
-    batch_size=8,
+    batch_size=10,
     class_mode="categorical",
-    subset="training")
+    subset="training",
+    shuffle=True
+)
+
 
 validation_generator = train_datagen.flow_from_directory(
-    "car_data/processed_support_set/",
+    "../dataset/vehicle_images_vault/",
     target_size=(224,224),
-    batch_size=8,
+    batch_size=10,
     class_mode="categorical",
     subset="validation")
 
@@ -35,7 +38,7 @@ class_names = list(train_generator.class_indices.keys())
 
 #plot images
 def plot_imgs(images, labels, class_names, title):
-    num_images = min(len(images), 8) # adjust to batch size
+    num_images = min(len(images), 10) # adjust to batch size
     plt.figure(figsize=(12,12))
     for i in range(num_images):
         plt.subplot(4, 4, i+1)
@@ -54,7 +57,7 @@ validation_images, validation_labels = next(validation_generator)
 plot_imgs(validation_images, validation_labels, class_names, 'Validation Data')
 
 model = Sequential([
-    Conv2D(32, (3,3), activation='relu', input_shape=(224,224,3)),
+    keras.layers.Input(shape=(224, 224, 3)),
     MaxPooling2D(pool_size=(2,2)),
     Conv2D(64, (3,3), activation='relu'),
     MaxPooling2D(pool_size=(2,2)),
@@ -63,12 +66,12 @@ model = Sequential([
     Flatten(),
     Dense(128, activation='relu'),
     Dropout(0.5),
-    Dense(6, activation='softmax')
+    Dense(5, activation='softmax')
 ])
 
 model.compile(optimizer=Adam(), loss='categorical_crossentropy', metrics=['accuracy'])
 
-early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
 
 # After training your model
 history = model.fit(train_generator, 
@@ -114,8 +117,9 @@ def predict_and_plot_images(img_paths, model, class_names):
 
 # List of paths to the four images
 img_paths = [
-    'car_data/query_set/cybertruck.jpeg',
-    'car_data/query_set/testChevy.jpg'
+    'testImage.jpg',
+    'testBMW.jpg',
+    'testLexus.webp'
 ]
 
 # Predict and plot the images

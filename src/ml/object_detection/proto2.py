@@ -1,13 +1,46 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
-from PIL import Image
+from torchvision import models, transforms
+import timm
 import os
+from torch.utils.data import Dataset, DataLoader
+from PIL import Image
 import numpy as np
+from rembg import remove
+
+
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# # # Function to remove background and save the processed image
+# def remove_background(input_path, output_path):
+#     with open(input_path, 'rb') as i:
+#         with open(output_path, 'wb') as o:
+#             input = i.read()
+#             output = remove(input)
+#             o.write(output)
+
+# # Process all images in the dataset
+# def process_dataset(input_dir, output_dir):
+#     for item in os.listdir(input_dir):
+#         item_path = os.path.join(input_dir, item)
+#         if os.path.isdir(item_path):
+#             class_input_dir = item_path
+#             class_output_dir = os.path.join(output_dir, item)
+#             os.makedirs(class_output_dir, exist_ok=True)
+            
+#             for image_name in os.listdir(class_input_dir):
+#                 if not image_name.startswith('.'):  # Skip hidden files
+#                     input_path = os.path.join(class_input_dir, image_name)
+#                     output_path = os.path.join(class_output_dir, image_name)
+#                     remove_background(input_path, output_path)
+
+# # Process the dataset
+# input_dir = "../dataset/vehicle_images_vault"
+# output_dir = "../dataset/vehicle_images_altered"
+# process_dataset(input_dir, output_dir)
+
 
 class CustomImageDataset(Dataset):
     def __init__(self, root_dir, transform=None):
@@ -25,7 +58,7 @@ class CustomImageDataset(Dataset):
                 continue  # Skip non-directory files like .DS_Store
             for img_name in os.listdir(class_path):
                 img_path = os.path.join(class_path, img_name)
-                if img_name.endswith(('.png', '.jpg', '.jpeg')):  # Ensure it's an image
+                if img_name.endswith(('.png', '.jpg', '.jpeg')):
                     images.append((img_path, self.class_to_idx[cls]))
         return images
 
@@ -40,47 +73,88 @@ class CustomImageDataset(Dataset):
             image = self.transform(image)
         
         return image, label
-
-class PrototypicalNetwork(nn.Module):
-    def __init__(self):
-        super(PrototypicalNetwork, self).__init__()
-        self.encoder = nn.Sequential(
-            self.conv_block(3, 64),
-            self.conv_block(64, 64),
-            self.conv_block(64, 64),
-            self.conv_block(64, 64),
+    
+class EnhancedPrototypicalNetwork(nn.Module):
+    def __init__(self, embedding_size=512, pretrained=True):
+        super(EnhancedPrototypicalNetwork, self).__init__()
+        
+        # Load pretrained EfficientNetV2 as base model
+        self.base_model = timm.create_model('efficientnetv2_rw_s', pretrained=True)
+        
+        # Get the output features of the model
+        with torch.no_grad():
+            # Create a dummy input to get the output size
+            dummy_input = torch.randn(1, 3, 224, 224)
+            features = self.base_model.forward_features(dummy_input)
+            self.feature_size = features.shape[1] 
+        
+        #reset classifier to impplement our limited classes
+        self.base_model.reset_classifier(0)
+        
+        self.embedding_head = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
-            nn.Linear(64*4*4, 64)  # Adjust the input size based on your image dimensions
+            nn.Linear(self.feature_size, 1024),
+            nn.BatchNorm1d(1024),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.2),
+            nn.Linear(1024, embedding_size),
+            nn.BatchNorm1d(embedding_size)
         )
-    
-    def conv_block(self, in_channels, out_channels):
-        return nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, 3, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(),
-            nn.MaxPool2d(2)
-        )
-    
+        
+        
+        self.freeze_base_layers()
+        
+    def freeze_base_layers(self):
+        
+        layers_to_freeze = 0
+        for i, (name, param) in enumerate(self.base_model.named_parameters()):
+            if i < layers_to_freeze:
+                param.requires_grad = False
+                
     def forward(self, x):
-        x = self.encoder[:-2](x)  # Pass through conv blocks before flattening
-        print(f"Shape before flattening: {x.shape}")
-        x = self.encoder[-2](x)  # Flatten
-        x = self.encoder[-1](x)  # Linear layer
-        return x
+        # pass through base model
+        features = self.base_model.forward_features(x)
+        
+        embeddings = self.embedding_head(features)
+        
+        embeddings = F.normalize(embeddings, p=2, dim=1)
+        
+        return embeddings
+
+def get_transforms(train=True):
+    if train:
+        return transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomAffine(degrees=10, translate=(0.1, 0.1), scale=(0.9, 1.1)),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+            transforms.RandomAutocontrast(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], 
+                               std=[0.229, 0.224, 0.225])
+        ])
+    else:
+        return transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], 
+                               std=[0.229, 0.224, 0.225])
+        ])
 
 
-def euclidean_dist(x, y):
-    return torch.cdist(x.unsqueeze(0), y.unsqueeze(0)).squeeze(0)
-
-def create_class_prototypes(model, data_loader, device):
+def create_class_prototypes(model, data_loader, device, temperature=0.1):
     model.eval()
     prototypes = []
     labels_list = []
     
     with torch.no_grad():
         for images, labels in data_loader:
-            images = images.to(device)  # Move images to the correct device
+            images = images.to(device)
             embeddings = model(images)
+            
+            # averaging of embeddings
+            embeddings = embeddings / temperature
             
             for embedding, label in zip(embeddings, labels):
                 if label.item() not in labels_list:
@@ -88,59 +162,116 @@ def create_class_prototypes(model, data_loader, device):
                     prototypes.append(embedding)
                 else:
                     idx = labels_list.index(label.item())
-                    prototypes[idx] = (prototypes[idx] + embedding) / 2  # Update prototype
+                    # Exponential moving average update
+                    alpha = 0.9
+                    prototypes[idx] = alpha * prototypes[idx] + (1 - alpha) * embedding
     
-    # Stack prototypes into a single tensor
+    # Stack and normalize prototypes
     prototypes = torch.stack(prototypes)
+    prototypes = F.normalize(prototypes, p=2, dim=1)
     
     return prototypes, labels_list
 
-
-def classify_query(model, query_image, prototypes, device):
+# Updated classification function with cosine similarity
+def classify_query(model, query_image, prototypes, device, temperature=0.1):
     model.eval()
     
-    query_image = query_image.unsqueeze(0).to(device)  # Move query image to the device
+    query_image = query_image.unsqueeze(0).to(device)
     query_embedding = model(query_image)
     
-    # Calculate distances between query embedding and prototypes
-    distances = torch.cdist(query_embedding, prototypes.unsqueeze(0)).squeeze(0)
+    query_embedding = query_embedding / temperature
     
-    # Find the class with the smallest distance
-    predicted_label = distances.argmin().item()
+    # calc cosine similarity
+    similarities = F.cosine_similarity(
+        query_embedding.unsqueeze(1),
+        prototypes.unsqueeze(0),
+        dim=2
+    )
     
-    return predicted_label, distances
+    # convert these similarities to probabilities
+    probabilities = F.softmax(similarities, dim=1)
+    
+    predicted_label = probabilities.argmax(dim=1).item()
+    
+    return predicted_label, probabilities.squeeze()
 
+
+def load_and_preprocess_image(image_path, transform):
+    """
+    Load an image from the specified path and apply the provided transform.
+    """
+    image = Image.open(image_path).convert('RGB')
+    image = transform(image)
+    return image
+
+def classify_random_image(model, image_path, prototypes, labels_list, transform, device):
+    """
+    Load a random image, preprocess it, and classify it using the prototypical network.
+    """
+    image = load_and_preprocess_image(image_path, transform)
+    image = image.to(device)  # Move image to device (GPU/CPU)
+    
+    predicted_label, probabilities = classify_query(model, image, prototypes, device)
+    
+    return predicted_label, probabilities
+
+# Updated main function
 def main():
-    # Set up dataset and data loader
-    transform = transforms.Compose([
-        transforms.Resize((64, 64)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
+    # Set up dataset and data loader with new transforms
+    train_transform = get_transforms(train=True)
+    test_transform = get_transforms(train=False)
     
-    dataset = CustomImageDataset('car_data/support_set/', transform=transform)
-    data_loader = DataLoader(dataset, batch_size=5, shuffle=True)
+    dataset = CustomImageDataset('../dataset/vehicle_images_vault/', 
+                               transform=train_transform)
+    test_dataset = CustomImageDataset('../dataset/vehicle_images_vault/', 
+                                    transform=test_transform)
     
-    # Initialize model and move to device
-    model = PrototypicalNetwork().to(device)
+    data_loader = DataLoader(dataset, batch_size=32, shuffle=True, 
+                            num_workers=4, pin_memory=True)
     
-    # Create class prototypes
-    prototypes, labels_list = create_class_prototypes(model, data_loader, device)
+    # Initialize enhanced model
+    model = EnhancedPrototypicalNetwork(embedding_size=512).to(device)
     
-    # Example: Classify a query image
-    query_image, true_label = dataset[0]  # Get the first image as an example
-    query_image = query_image.to(device)  # Move image to device
-    predicted_label, distances = classify_query(model, query_image, prototypes, device)
+    # Create prototypes
+    prototypes, labels_list = create_class_prototypes(model, data_loader, 
+                                                    device, temperature=0.1)
     
-    print(f"True label: {dataset.classes[true_label]}")
-    print(f"Predicted label: {dataset.classes[labels_list[predicted_label]]}")
-    print("Distances to prototypes:")
+    # Example classification
+    query_image, true_label = test_dataset[0]
+    query_image = query_image.to(device)
+    predicted_label, probabilities = classify_query(model, query_image, 
+                                                 prototypes, device)
     
-    # Loop through distances and print them
-    for i in range(len(distances)):
-        # Assuming distances is a 1D tensor with distances to each class prototype
-        print(f"  {dataset.classes[labels_list[i]]}: {distances[i].item():.4f}")
+    print(f"True label: {test_dataset.classes[true_label]}")
+    print(f"Predicted label: {test_dataset.classes[labels_list[predicted_label]]}")
+    print("\nClass probabilities:")
+    
+    # Print sorted probabilities
+    probs_dict = {test_dataset.classes[labels_list[i]]: prob.item() 
+                  for i, prob in enumerate(probabilities)}
+    sorted_probs = sorted(probs_dict.items(), key=lambda x: x[1], reverse=True)
+    
+    for class_name, prob in sorted_probs:
+        print(f"  {class_name}: {prob:.4f}")
+
+
+    #upload test image
+    random_image_path = './testBMW.jpg'
+
+    predicted_label, probabilities = classify_random_image(model, random_image_path, prototypes, 
+                                                        labels_list, test_transform, device)
+
+    print(f"\nPredicted label for random image: {dataset.classes[labels_list[predicted_label]]}")
+    print("\nClass probabilities:")
+
+    probs_dict = {dataset.classes[labels_list[i]]: prob.item() 
+                for i, prob in enumerate(probabilities)}
+    sorted_probs = sorted(probs_dict.items(), key=lambda x: x[1], reverse=True)
+
+    for class_name, prob in sorted_probs:
+        print(f"  {class_name}: {prob:.4f}")
 
 if __name__ == "__main__":
     main()
 
+    
