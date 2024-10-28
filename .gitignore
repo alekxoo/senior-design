@@ -1,2 +1,5 @@
 venv/
 medranovenv/
+django/
+aws_credentials.py
+package
