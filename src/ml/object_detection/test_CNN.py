@@ -8,7 +8,7 @@ import cv2
 # Function to load the trained CNN model from the .pt file
 def load_classification_model(model_path, device):
     # Load the ResNet18 model architecture
-    model = models.resnet18(weights=None)  # Start with a fresh ResNet18
+    model = models.resnet18(weights=None)  # Start with a fresh ResNet18, no weights added
     num_ftrs = model.fc.in_features
     model.fc = nn.Linear(num_ftrs, 5)  # Modify the last layer for 5 classes (example)
 
@@ -46,19 +46,19 @@ def main():
     # Device configuration (use GPU if available, otherwise fallback to CPU)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    # Path to the trained model's .pt file
+    #get the path to the pytorch model weights
     model_path = "./CNNModels/best.pt"  # Modify this with the correct path to your .pt file
 
     # Load the trained model
     model = load_classification_model(model_path, device)
 
     # Input image path for classification
-    image_path = "testBMW.jpg"  # Modify with the path to the image you want to classify
+    image_path = "testBMW.jpg" 
 
     # Classify the image
     predicted_class = classify_image(image_path, model, device)
 
-    # Print the result
+    # Print the result using the index to class label mapping
     print(f"Predicted Class: {class_labels[predicted_class]}")
 
     # Display the image with the predicted label
