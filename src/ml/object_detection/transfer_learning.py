@@ -49,7 +49,7 @@ def imshow(inp, title=None):
     plt.pause(0.001)  # pause a bit so that plots are updated
 
 
-def train_model(model, criterion, optimizer, scheduler, num_epochs=25, patience=4, save_path='best.pt'):
+def train_model(model, criterion, optimizer, scheduler, num_epochs=25, patience=5, save_path='best.pt'):
     since = time.time()
 
     #create instance of early stopping
@@ -98,14 +98,14 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25, patience=
             if phase == 'val':
                 if epoch_acc > best_acc:
                     best_acc = epoch_acc
-                    torch.save(model.state_dict, save_path)
+                    torch.save(model.state_dict(), save_path)#edit this from model.state_dict -> model.state_dict(), method call
                 
                 early_stopping(epoch_loss, model)
                 if early_stopping.early_stop: #if we need to do an early stop
                     print("Stopping Training Early!")
                     time_elapsed = time.time() - since
                     print(f"Training stopped at epoch {epoch} after {time_elapsed// 60:.0f}m {time_elapsed % 60:.0f}s")
-                    model.load_state_dict(torch.load(save_path))#later on if we want to just train the model and save weights then remove this line to ensure we do not load the weights
+                    model.load_state_dict(torch.load(save_path, weights_only=True))#later on if we want to just train the model and save weights then remove this line to ensure we do not load the weights
                     return model
         print()
 
@@ -114,7 +114,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25, patience=
     print(f'Best val Acc: {best_acc:4f}')
 
     # Load the best model weights
-    model.load_state_dict(torch.load(save_path))#later on if we want to just train the model and save weights then remove this line to ensure we do not load the weights
+    model.load_state_dict(torch.load(save_path, weights_only=True))#later on if we want to just train the model and save weights then remove this line to ensure we do not load the weights
     return model
 
 
@@ -213,9 +213,9 @@ def main():
                            exp_lr_scheduler, num_epochs=25)
 
     #visualize the model on some data, removed this to just train and save the weights
-    # visualize_model(model_conv)
-    # plt.ioff()
-    # plt.show()
+    visualize_model(model_conv)
+    plt.ioff()
+    plt.show()
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()

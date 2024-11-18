@@ -1,189 +1,227 @@
-import cv2
-import torch
-import os
-import numpy as np
-from torchvision import transforms
-from torch.utils.data import Dataset, DataLoader
-from PIL import Image
-import torch.nn as nn
-import torch.nn.functional as F
-from models.experimental import attempt_load
-from utils.general import non_max_suppression
+# import torch
+# import cv2
+# import numpy as np
+# from PIL import Image
+# from torchvision import models, transforms
+# import torch.nn as nn
+# import os
+# import matplotlib.pyplot as plt
+# from pathlib import Path
+# import torch.backends.cudnn as cudnn
+# from yolov5 import YOLOv5
 
-# Check for GPU availability
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# # Function to load the trained classification model
+# def load_classification_model(model_path, device):
+#     # Load ResNet18 model
+#     model = models.resnet18(weights='IMAGENET1K_V1')
+#     num_ftrs = model.fc.in_features
+#     model.fc = nn.Linear(num_ftrs, 5)  # Assuming 5 classes from your training
+#     model.load_state_dict(torch.load(model_path))
+#     model = model.to(device)
+#     model.eval()
+#     return model
 
-# Custom Dataset for loading images
-class CustomImageDataset(Dataset):
-    def __init__(self, root_dir, transform=None):
-        self.root_dir = root_dir
-        self.transform = transform
-        self.classes = os.listdir(root_dir)
-        self.class_to_idx = {cls: idx for idx, cls in enumerate(self.classes)}
-        self.images = self._load_images()
+# # Function to load the YOLOv5 model for object detection
+# def load_yolov5_model(model_path):
+#     yolov5_model = YOLOv5(model_path)
+#     return yolov5_model
 
-    def _load_images(self):
-        images = []
-        for cls in self.classes:
-            class_path = os.path.join(self.root_dir, cls)
-            if not os.path.isdir(class_path):
-                continue
-            for img_name in os.listdir(class_path):
-                img_path = os.path.join(class_path, img_name)
-                if img_name.endswith(('.png', '.jpg', '.jpeg')):
-                    images.append((img_path, self.class_to_idx[cls]))
-        return images
 
-    def __len__(self):
-        return len(self.images)
+# class_labels = ['mazda', 'audi', 'bmw', 'lexus', 'toyota']
 
-    def __getitem__(self, idx):
-        img_path, label = self.images[idx]
-        image = Image.open(img_path).convert('RGB')
+# # Function for object detection and classification
+# def infer(image_path, yolov5_model, classification_model, device):
+#     # Load image for YOLOv5
+#     img = cv2.imread(image_path)
+#     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
+#     # Use YOLOv5 to detect objects
+#     results = yolov5_model.predict(img_rgb)
+#     detections = results.xywh[0]  # detections (x, y, w, h, confidence, class)
+
+#     # Print detections
+#     print(f"Detected {len(detections)} objects.")
+
+#     # Loop over detections
+#     for detection in detections:
+#         x_center, y_center, width, height, confidence, class_idx = detection
+#         print(f"Class ID: {class_idx}, Confidence: {confidence}")
         
-        if self.transform:
-            image = self.transform(image)
-        
-        return image, label
-
-# Prototypical Network
-class PrototypicalNetwork(nn.Module):
-    def __init__(self):
-        super(PrototypicalNetwork, self).__init__()
-        self.encoder = nn.Sequential(
-            self.conv_block(3, 64),
-            self.conv_block(64, 64),
-            self.conv_block(64, 64),
-            self.conv_block(64, 64),
-            nn.Flatten(),
-            nn.Linear(64 * 4 * 4, 64)  # Adjust the input size based on your image dimensions
-        )
-    
-    def conv_block(self, in_channels, out_channels):
-        return nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, 3, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(),
-            nn.MaxPool2d(2)
-        )
-    
-    def forward(self, x):
-        x = self.encoder[:-2](x)  # Pass through conv blocks before flattening
-        x = self.encoder[-2](x)  # Flatten
-        x = self.encoder[-1](x)  # Linear layer
-        return x
-
-def euclidean_dist(x, y):
-    return torch.cdist(x.unsqueeze(0), y.unsqueeze(0)).squeeze(0)
-
-def create_class_prototypes(model, data_loader, device):
-    model.eval()
-    prototypes = []
-    labels_list = []
-    
-    with torch.no_grad():
-        for images, labels in data_loader:
-            images = images.to(device)
-            embeddings = model(images)
+#         # If confidence is above a threshold, classify the object
+#         if confidence > 0.5:
+#             # Extract the region of interest (ROI) from the image
+#             x1 = int((x_center - width / 2) * img.shape[1])
+#             y1 = int((y_center - height / 2) * img.shape[0])
+#             x2 = int((x_center + width / 2) * img.shape[1])
+#             y2 = int((y_center + height / 2) * img.shape[0])
             
-            for embedding, label in zip(embeddings, labels):
-                if label.item() not in labels_list:
-                    labels_list.append(label.item())
-                    prototypes.append(embedding)
-                else:
-                    idx = labels_list.index(label.item())
-                    prototypes[idx] = (prototypes[idx] + embedding) / 2  # Update prototype
-    
-    prototypes = torch.stack(prototypes)
-    
-    return prototypes, labels_list
+#             roi = img_rgb[y1:y2, x1:x2]
+#             roi_pil = Image.fromarray(roi)
 
-def classify_query(model, query_image, prototypes, device):
+#             # Preprocess the image for classification
+#             transform = transforms.Compose([
+#                 transforms.Resize((224, 224)),
+#                 transforms.ToTensor(),
+#                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+#             ])
+#             roi_tensor = transform(roi_pil).unsqueeze(0).to(device)
+
+#             # Predict the class of the object using the classification model
+#             with torch.no_grad():
+#                 output = classification_model(roi_tensor)
+#                 _, pred_class = torch.max(output, 1)
+#                 predicted_class_name = class_labels[pred_class.item()]
+#                 print(f"Predicted Class: {predicted_class_name}")
+
+#             # Draw bounding box and label on the image
+#             label = f"{predicted_class_name} ({confidence:.2f})"
+#             cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
+#             cv2.putText(img, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
+
+#     # Display the image with detections
+#     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+#     plt.imshow(img_rgb)
+#     plt.axis('off')
+#     plt.show()
+
+# def main():
+#     cudnn.benchmark = True
+
+#     # Device configuration
+#     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+#     # Load the YOLOv5 and classification models
+#     yolov5_model_path = "./models/yolov5s.pt"  # Path to YOLOv5 weights
+#     classification_model_path = "./CNNModels/best.pt"  # Path to your custom trained model
+
+#     yolov5_model = load_yolov5_model(yolov5_model_path)
+#     classification_model = load_classification_model(classification_model_path, device)
+
+#     # Image for inference
+#     image_path = "testT.webp"  # Example image path for inference
+
+#     # Run inference
+#     infer(image_path, yolov5_model, classification_model, device)
+
+# if __name__ == '__main__':
+#     main()
+
+import torch
+import cv2
+import numpy as np
+from PIL import Image
+from torchvision import models, transforms
+import torch.nn as nn
+import os
+import matplotlib.pyplot as plt
+from pathlib import Path
+import torch.backends.cudnn as cudnn
+from yolov5 import YOLOv5
+
+# Function to load the trained classification model
+def load_classification_model(model_path, device):
+    # Load ResNet18 model
+    model = models.resnet18(weights='IMAGENET1K_V1')
+    num_ftrs = model.fc.in_features
+    model.fc = nn.Linear(num_ftrs, 5)  # Assuming 5 classes from your training
+    model.load_state_dict(torch.load(model_path))
+    model = model.to(device)
     model.eval()
-    
-    query_image = query_image.unsqueeze(0).to(device)
-    query_embedding = model(query_image)
-    
-    distances = torch.cdist(query_embedding, prototypes.unsqueeze(0)).squeeze(0)
-    predicted_label = distances.argmin().item()
-    
-    return predicted_label, distances
+    return model
 
-def classify_car(model, query_image, prototypes, labels_list, device):
-    query_image = query_image.unsqueeze(0).to(device)
-    predicted_label, distances = classify_query(model, query_image, prototypes, device)
-    return labels_list[predicted_label], distances
-
-def process_frame(frame, model, prototypes, labels_list, device, yolo_model):
-    # Resize the frame to 640x640 for YOLOv5
-    img = cv2.resize(frame, (640, 640))
-    
-    # Convert the image to a tensor
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # Convert to RGB
-    img = torch.from_numpy(img).float()  # Convert to tensor
-    img /= 255.0  # Normalize to [0, 1]
-    img = img.permute(2, 0, 1).unsqueeze(0)  # Change shape to (1, 3, 640, 640)
-
-    # Detect cars using YOLOv5
-    detections = detect_cars(img, yolo_model)
-
-    # Process the detections as needed
-    # Here you can draw boxes or process the detections further
-    for det in detections:
-        x1, y1, x2, y2, conf, cls = det
-        cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
-
-    return frame
-
-def detect_cars(img, yolo_model):
-    # Perform inference
-    pred = yolo_model(img)[0]  # Get predictions
-
-    # Apply Non-Maximum Suppression
-    pred = non_max_suppression(pred, conf_thres=0.25, iou_thres=0.45)[0]  # Adjust thresholds as necessary
-
-    # Convert predictions to a more manageable format
-    detections = []
-    if pred is not None and len(pred):
-        for *xyxy, conf, cls in pred:
-            detections.append((*xyxy, conf.item(), cls.item()))
-
-    return detections
+# Function to load the YOLOv5 model for object detection
+def load_yolov5_model(model_path):
+    yolov5_model = YOLOv5(model_path)
+    return yolov5_model
 
 
-def main():
-    # Set up dataset and data loader
-    transform = transforms.Compose([
-        transforms.Resize((64, 64)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-    
-    dataset = CustomImageDataset('car_data/support_set/', transform=transform)
-    data_loader = DataLoader(dataset, batch_size=5, shuffle=True)
-    
-    # Initialize Prototypical Network
-    model = PrototypicalNetwork().to(device)
-    
-    # Create class prototypes
-    prototypes, labels_list = create_class_prototypes(model, data_loader, device)
-    
-    # Load YOLOv5 model
-    yolo_model = attempt_load('yolov5s.pt')  # Adjust the path as necessary
-    yolo_model.eval()
-    
-    # Process video feed
-    cap = cv2.VideoCapture(1)  # Use 0 for webcam or provide video file path
-    while cap.isOpened():
-        ret, frame = cap.read()
+class_labels = ['mazda', 'audi', 'bmw', 'lexus', 'toyota']
+
+# Function for object detection and classification
+def infer_webcam(yolov5_model, classification_model, device):
+    # Open the webcam
+    cap = cv2.VideoCapture(0)  # 0 is the default webcam
+    if not cap.isOpened():
+        print("Error: Could not open webcam.")
+        return
+
+    while True:
+        ret, img = cap.read()
         if not ret:
+            print("Error: Failed to capture image.")
             break
-        processed_frame = process_frame(frame, model, prototypes, labels_list, device, yolo_model)
-        cv2.imshow('Frame', processed_frame)
+
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        
+        # Use YOLOv5 to detect objects
+        results = yolov5_model.predict(img_rgb)
+        detections = results.xywh[0]  # detections (x, y, w, h, confidence, class)
+
+        # Print detections
+        print(f"Detected {len(detections)} objects.")
+
+        # Loop over detections
+        for detection in detections:
+            x_center, y_center, width, height, confidence, class_idx = detection
+            print(f"Class ID: {class_idx}, Confidence: {confidence}")
+            
+            # If confidence is above a threshold, classify the object
+            if confidence > 0.5:
+                # Extract the region of interest (ROI) from the image
+                x1 = int((x_center - width / 2) * img.shape[1])
+                y1 = int((y_center - height / 2) * img.shape[0])
+                x2 = int((x_center + width / 2) * img.shape[1])
+                y2 = int((y_center + height / 2) * img.shape[0])
+                
+                roi = img_rgb[y1:y2, x1:x2]
+                roi_pil = Image.fromarray(roi)
+
+                # Preprocess the image for classification
+                transform = transforms.Compose([
+                    transforms.Resize((224, 224)),
+                    transforms.ToTensor(),
+                    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+                ])
+                roi_tensor = transform(roi_pil).unsqueeze(0).to(device)
+
+                # Predict the class of the object using the classification model
+                with torch.no_grad():
+                    output = classification_model(roi_tensor)
+                    _, pred_class = torch.max(output, 1)
+                    predicted_class_name = class_labels[pred_class.item()]
+                    print(f"Predicted Class: {predicted_class_name}")
+
+                # Draw bounding box and label on the image
+                label = f"{predicted_class_name} ({confidence:.2f})"
+                cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                cv2.putText(img, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
+
+        # Display the image with detections
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        cv2.imshow("Webcam Inference", img_rgb)
+
+        # Check for exit key (press 'q' to quit)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
+
     cap.release()
     cv2.destroyAllWindows()
 
-if __name__ == "__main__":
+def main():
+    cudnn.benchmark = True
+
+    # Device configuration
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    # Load the YOLOv5 and classification models
+    yolov5_model_path = "./models/yolov5s.pt"  # Path to YOLOv5 weights
+    classification_model_path = "./CNNModels/best.pt"  # Path to your custom trained model
+
+    yolov5_model = load_yolov5_model(yolov5_model_path)
+    classification_model = load_classification_model(classification_model_path, device)
+
+    # Run webcam inference
+    infer_webcam(yolov5_model, classification_model, device)
+
+if __name__ == '__main__':
     main()
