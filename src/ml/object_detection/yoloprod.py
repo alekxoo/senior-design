@@ -210,11 +210,11 @@ def infer_webcam(yolov5_model, classification_model, device):
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
         try:
-            # Use YOLOv5 to detect objects
+            #get results from yolo
             with autocast(enabled=torch.cuda.is_available()):
                 results = yolov5_model.predict(img_rgb)
 
-            # Check if there are any detections
+            #check how many detections there are
             if len(results.xywh[0]) > 0:
                 detections = results.xywh[0]
 
@@ -223,13 +223,13 @@ def infer_webcam(yolov5_model, classification_model, device):
 
                     # If confidence is above a threshold, classify the object
                     if confidence > 0.3:
-                        # Extract the region of interest (ROI) from the image
+                        # extract the region of interest (ROI) from the image
                         x1 = int((x_center - width / 2) * img.shape[1])
                         y1 = int((y_center - height / 2) * img.shape[0])
                         x2 = int((x_center + width / 2) * img.shape[1])
                         y2 = int((y_center + height / 2) * img.shape[0])
 
-                        # Ensure ROI is within image bounds
+                        # ensure ROI is within image bounds
                         x1 = max(0, x1)
                         y1 = max(0, y1)
                         x2 = min(img.shape[1], x2)
@@ -237,16 +237,16 @@ def infer_webcam(yolov5_model, classification_model, device):
 
                         roi = img_rgb[y1:y2, x1:x2]
 
-                        # Skip if ROI is too small
+                        # skip if ROI is too small
                         if roi.size == 0:
                             continue
 
                         roi_pil = Image.fromarray(roi)
 
-                        # Preprocess the image for classification
+                        # preprocess the image for classification
                         roi_tensor = transform(roi_pil).unsqueeze(0).to(device)
 
-                        # Predict the class of the object using the classification model
+                        # predict the class of the object using the classification model
                         with torch.no_grad():
                             output = classification_model(roi_tensor)
                             _, pred_class = torch.max(output, 1)
@@ -276,13 +276,13 @@ def infer_webcam(yolov5_model, classification_model, device):
 def main():
     cudnn.benchmark = True
 
-    # Device configuration
+    # device configuration
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # Load the YOLOv5 and classification models
-    yolov5_model_path = "./models/carbest.pt"  # Path to YOLOv5 weights
-    classification_model_path = "./CNNModels/best.pt"  # Path to your custom trained model
+    
+    yolov5_model_path = "./models/carbest.pt"  # grab yolov5 model weights
+    classification_model_path = "./CNNModels/best.pt"  # grab cnn model weights file
 
     yolov5_model = load_yolov5_model(yolov5_model_path)
     classification_model = load_classification_model(classification_model_path, device)
@@ -291,7 +291,7 @@ def main():
         print("Failed to load one or more models.")
         return
 
-    # Run webcam inference
+    
     infer_webcam(yolov5_model, classification_model, device)
 
 if __name__ == '__main__':
