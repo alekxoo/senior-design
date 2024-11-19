@@ -213,9 +213,9 @@ def main():
                            exp_lr_scheduler, num_epochs=25)
 
     #visualize the model on some data, removed this to just train and save the weights
-    visualize_model(model_conv)
-    plt.ioff()
-    plt.show()
+    # visualize_model(model_conv)
+    # plt.ioff()
+    # plt.show()
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
