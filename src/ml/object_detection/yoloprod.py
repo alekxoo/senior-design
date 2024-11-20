@@ -191,10 +191,8 @@ class_labels = ['mazda', 'audi', 'bmw', 'lexus', 'toyota']
 
 def infer_webcam(yolov5_model, classification_model, device):
     cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("Error: Could not open webcam.")
-        return
-
+    
+    # Image transformation for classification
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
@@ -204,69 +202,54 @@ def infer_webcam(yolov5_model, classification_model, device):
     while True:
         ret, img = cap.read()
         if not ret:
-            print("Error: Failed to capture image.")
             break
 
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
         try:
-            #get results from yolo
-            with autocast(enabled=torch.cuda.is_available()):
-                results = yolov5_model.predict(img_rgb)
+            # Run YOLOv5 detection
+            results = yolov5_model.predict(img_rgb)
 
-            #check how many detections there are
-            if len(results.xywh[0]) > 0:
-                detections = results.xywh[0]
+            # Process each detection
+            for *xyxy, conf, cls in results.xyxy[0]:
+                #check if confidence is high enough to classify based on CNN probabilities
+                if conf > 0.7:
+                    # convert coordinates to integers
+                    x1, y1, x2, y2 = map(int, xyxy)
+                    
+                    # ensure coordinates are within image bounds
+                    x1 = max(0, x1)
+                    y1 = max(0, y1)
+                    x2 = min(img.shape[1], x2)
+                    y2 = min(img.shape[0], y2)
 
-                for detection in detections:
-                    x_center, y_center, width, height, confidence, class_idx = detection
-
-                    # If confidence is above a threshold, classify the object
-                    if confidence > 0.2:
-                        # extract the region of interest (ROI) from the image
-                        x1 = int((x_center - width / 2) * img.shape[1])
-                        y1 = int((y_center - height / 2) * img.shape[0])
-                        x2 = int((x_center + width / 2) * img.shape[1])
-                        y2 = int((y_center + height / 2) * img.shape[0])
-
-                        # ensure ROI is within image bounds
-                        x1 = max(0, x1)
-                        y1 = max(0, y1)
-                        x2 = min(img.shape[1], x2)
-                        y2 = min(img.shape[0], y2)
-
+                    #check if ROI is within a reasonable size
+                    #TODO: may need to edit this to be able to cover a larger region if needed while zooming in/out
+                    if x2 - x1 > 20 and y2 - y1 > 20:
                         roi = img_rgb[y1:y2, x1:x2]
-
-                        # skip if ROI is too small
-                        if roi.size == 0:
-                            continue
-
                         roi_pil = Image.fromarray(roi)
 
-                        # preprocess the image for classification
+                        #use the transform to preprocess the image
                         roi_tensor = transform(roi_pil).unsqueeze(0).to(device)
 
-                        # predict the class of the object using the classification model
                         with torch.no_grad():
                             output = classification_model(roi_tensor)
                             _, pred_class = torch.max(output, 1)
                             predicted_class_name = class_labels[pred_class.item()]
 
-                        # Print detection information
-                        print(f"Detected: {predicted_class_name} (Confidence: {confidence:.2f})")
-
-                        # Draw bounding box and label on the image
-                        label = f"{predicted_class_name} ({confidence:.2f})"
+                        #draw the bounding box and label
+                        label = f"{predicted_class_name} ({conf:.2f})"
                         cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
-                        cv2.putText(img, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
+                        cv2.putText(img, label, (x1, y1 - 10), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
 
             # Display the image with detections
-            cv2.imshow("Webcam Inference", img)
+            cv2.imshow("YOLO/CNN Test Interface", img)
 
         except Exception as e:
             print(f"Error during inference: {e}")
 
-        # Check for exit key (press 'q' to quit)
+        # Exit on 'q' key press
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
@@ -280,10 +263,11 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    
+    #Tested loading the default weights trained on COCO but started to classify everything so use carbest for now and then finetune later to just detect vehicle objects
     yolov5_model_path = "./models/carbest.pt"  # grab yolov5 model weights
     classification_model_path = "./CNNModels/best.pt"  # grab cnn model weights file
 
+    #load model weights for both the detection and classification layers
     yolov5_model = load_yolov5_model(yolov5_model_path)
     classification_model = load_classification_model(classification_model_path, device)
 
