@@ -222,7 +222,7 @@ def infer_webcam(yolov5_model, classification_model, device):
                     x_center, y_center, width, height, confidence, class_idx = detection
 
                     # If confidence is above a threshold, classify the object
-                    if confidence > 0.3:
+                    if confidence > 0.2:
                         # extract the region of interest (ROI) from the image
                         x1 = int((x_center - width / 2) * img.shape[1])
                         y1 = int((y_center - height / 2) * img.shape[0])
