@@ -187,6 +187,7 @@ def load_yolov5_model(model_path):
         print(f"Error loading YOLOv5 model: {e}")
         return None
 
+#TODO: find dynamic way by means of meta data or so in order to change class labels each time after training
 class_labels = ['mazda', 'audi', 'bmw', 'lexus', 'toyota']
 
 def infer_webcam(yolov5_model, classification_model, device):
