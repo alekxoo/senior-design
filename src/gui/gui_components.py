@@ -155,7 +155,7 @@ class TrackingStatusBar(ctk.CTkFrame):
     
     def toggle_tracking(self):
         self.tracking = not self.tracking
-        self.vehicle_lost = True  # Reset lost state when toggling tracking
+        self.vehicle_lost = False  # Reset lost state when toggling tracking
         self.update_status()
     
     def update_status(self):
@@ -422,7 +422,7 @@ class PTZControls(ctk.CTkFrame):
             text="◀",
             width=30,
             command=lambda: self.adjust_value('tilt', -1)
-        )
+        )      
         self.tilt_left.pack(side="left", padx=2)
         
         self.tilt_slider = ctk.CTkSlider(
@@ -510,99 +510,92 @@ class VideoFeed(ctk.CTkFrame):
     def __init__(self, parent, video_source=None, log_console=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.configure(fg_color="black")
-        self.log_console = log_console
-
-        # Video source setup
+        self.parent = parent
         self.video_source = video_source
+        self.log_console = log_console
         self.cap = None
         self.is_running = False
+        self.is_paused = False
+        self.delay = None
+        self.window_name = "Video Feed"
+
+        # Create empty frame to maintain GUI layout
+        self.placeholder = ctk.CTkFrame(self, fg_color="black")
+        self.placeholder.pack(expand=True, fill="both")
         
-        # Single canvas for both video and overlay
-        self.canvas = ctk.CTkCanvas(self, bg="black", highlightthickness=0)
-        self.canvas.pack(expand=True, fill="both")
+        # Bind to parent window movement
+        root = self.winfo_toplevel()
+        root.bind("<Configure>", self.update_window_position)
         
-        # Drawing setup
-        self.canvas.bind("<ButtonPress-1>", self.start_drag)
-        self.canvas.bind("<B1-Motion>", self.drag)
-        self.canvas.bind("<ButtonRelease-1>", self.end_drag)
-        
-        # Start video if source provided
         if video_source is not None:
             self.start_video()
 
     def start_video(self):
-        if self.cap is None:
-            self.cap = cv2.VideoCapture(self.video_source)
-            
+        self.cap = cv2.VideoCapture(self.video_source)
         if not self.cap.isOpened():
-            print("Error: Could not open video source")
+            if self.log_console:
+                self.log_console.log("Error: Could not open video source")
             return
+            
+        # Calculate delay based on video FPS
+        fps = self.cap.get(cv2.CAP_PROP_FPS)
+        self.delay = int(1000 / fps)  # Convert to milliseconds
+        if self.log_console:
+            self.log_console.log(f"Video FPS: {fps}, Frame delay: {self.delay}ms")
+        
+        # Create OpenCV window and position it
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+        self.update_window_position()
             
         self.is_running = True
         self.update_frame()
-    
+
     def update_frame(self):
-        if self.is_running and self.cap:
+        if self.is_running and self.cap and not self.is_paused:
             ret, frame = self.cap.read()
             if ret:
-                # If end of video, loop back to start
+                # Loop video if at end
                 if self.video_source and not isinstance(self.video_source, int):
                     if self.cap.get(cv2.CAP_PROP_POS_FRAMES) == self.cap.get(cv2.CAP_PROP_FRAME_COUNT):
                         self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+                # Get placeholder dimensions
+                width = self.placeholder.winfo_width()
+                height = self.placeholder.winfo_height()
                 
-                # Convert BGR to RGB
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                
-                # Resize frame to fit canvas
-                canvas_width = self.canvas.winfo_width()
-                canvas_height = self.canvas.winfo_height()
-                
-                if canvas_width > 0 and canvas_height > 0:
-                    frame = cv2.resize(frame, (canvas_width, canvas_height))
-                
-                # Convert to PhotoImage
-                image = Image.fromarray(frame)
-                photo = ImageTk.PhotoImage(image=image)
-                
-                # Update canvas - use tag for video frame
-                self.canvas.delete("video")  # Delete old frame
-                self.canvas.create_image(0, 0, image=photo, anchor="nw", tags="video")
-                self.canvas.photo = photo  # Keep a reference
-                
-                # Make sure video stays behind drawings
-                self.canvas.tag_lower("video")
+                if width > 1 and height > 1:
+                    # Resize frame to match placeholder size
+                    frame = cv2.resize(frame, (width, height))
+                    
+                    # Show the frame
+                    cv2.imshow(self.window_name, frame)
+                    cv2.waitKey(1)
+
+            # Schedule next frame
+            self.after(self.delay, self.update_frame)
+        elif self.is_running:  # If paused, keep checking
+            self.after(100, self.update_frame)
+
+    def update_window_position(self, event=None):
+        """Update OpenCV window position to match placeholder position"""
+        if hasattr(self, 'window_name'):
+            # Get the placeholder's screen coordinates
+            x = self.placeholder.winfo_rootx()
+            y = self.placeholder.winfo_rooty()
+            width = self.placeholder.winfo_width()
+            height = self.placeholder.winfo_height()
             
-            # Schedule next update
-            self.after(30, self.update_frame)
-    
-    def start_drag(self, event):
-        self.start_x = event.x
-        self.start_y = event.y
-        self.rect = self.canvas.create_rectangle(
-            event.x, event.y, event.x, event.y,
-            outline="black",
-            width=2,
-            tags="overlay"  # Add tag for rectangle
-        )
-        # Ensure overlay stays on top
-        self.canvas.tag_raise("overlay")
+            # Resize and move OpenCV window
+            if width > 1 and height > 1:  # Ensure valid dimensions
+                cv2.resizeWindow(self.window_name, width, height)
+                cv2.moveWindow(self.window_name, x, y)
 
-    def drag(self, event):
-        self.canvas.coords(self.rect, self.start_x, self.start_y, event.x, event.y)
-        # Make sure rectangle stays visible
-        self.canvas.tag_raise(self.rect)
-
-    def end_drag(self, event):
-        msg = "Box: (%d, %d) to (%d, %d)" % (self.start_x, self.start_y, event.x, event.y)
-        if self.log_console:
-            self.log_console.log(msg)
-        self.canvas.delete(self.rect)
-    
     def stop_video(self):
         self.is_running = False
         if self.cap:
             self.cap.release()
             self.cap = None
+        cv2.destroyWindow(self.window_name)
 
     def __del__(self):
         self.stop_video()
@@ -652,10 +645,10 @@ class ModelSyncPanel(ctk.CTkFrame):
         # Simulate retrieved models from S3
         models = [
             RaceModel(
-                race_id="RACE_123",
+                race_id="H2R_Miata_Race",
                 version="1.0.0",
-                timestamp="2024-03-01 14:30",
-                cars=["Ferrari #44", "McLaren #77", "Porsche #11"],
+                timestamp="2024-12-13 14:30",
+                cars=["Green #11", "Yellow #50", "Blue #25", "White #11", "Navy #32"],
                 model_size="250MB"
             ),
             RaceModel(

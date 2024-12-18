@@ -11,8 +11,8 @@ from gui_components import (
 )
 from models import CameraSettings
 
-harris_hill_video = "/home/alekxoo/Documents/f24_class/senior_design/vehicle_images_vault/harris_hills_car_video.MOV"
-
+# harris_hill_video = "/home/alekxoo/Documents/f24_class/senior_design/vehicle_images_vault/harris_hills_car_video.MOV"
+harris_hill_video="/home/alekxoo/Downloads/MVI_6206.MP4"
 
 class PTZControlGUI:
     def __init__(self):
