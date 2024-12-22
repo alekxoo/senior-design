@@ -8,6 +8,8 @@ from typing import Callable, Optional, List
 from models import RecordingState, CameraSettings, RaceModel  # Add RaceModel here
 import cv2
 from PIL import Image, ImageTk
+from tkVideoPlayer import TkinterVideo
+import customtkinter as ctk
 import threading
 import socket
 
@@ -299,11 +301,7 @@ class UploadDialog(ctk.CTkToplevel):
     def setup_ui(self):
         self.progress_label = ctk.CTkLabel(self, text="Uploading recording...")
         self.progress_label.pack(pady=20)
-        
-        self.progress_bar = ctk.CTkProgressBar(self)
-        self.progress_bar.pack(pady=10)
-        self.progress_bar.set(0)
-        
+                
         self.simulate_upload()
     
     def simulate_upload(self, value=0):
@@ -513,89 +511,67 @@ class VideoFeed(ctk.CTkFrame):
         self.parent = parent
         self.video_source = video_source
         self.log_console = log_console
-        self.cap = None
         self.is_running = False
         self.is_paused = False
-        self.delay = None
-        self.window_name = "Video Feed"
-
-        # Create empty frame to maintain GUI layout
-        self.placeholder = ctk.CTkFrame(self, fg_color="black")
-        self.placeholder.pack(expand=True, fill="both")
-        
-        # Bind to parent window movement
-        root = self.winfo_toplevel()
-        root.bind("<Configure>", self.update_window_position)
+        self.setup_ui()
         
         if video_source is not None:
             self.start_video()
 
-    def start_video(self):
-        self.cap = cv2.VideoCapture(self.video_source)
-        if not self.cap.isOpened():
-            if self.log_console:
-                self.log_console.log("Error: Could not open video source")
-            return
-            
-        # Calculate delay based on video FPS
-        fps = self.cap.get(cv2.CAP_PROP_FPS)
-        self.delay = int(1000 / fps)  # Convert to milliseconds
-        if self.log_console:
-            self.log_console.log(f"Video FPS: {fps}, Frame delay: {self.delay}ms")
+    def setup_ui(self):
+        # Create the video player
+        self.player = TkinterVideo(master=self, scaled=True)
+        self.player.pack(expand=True, fill="both")
         
-        # Create OpenCV window and position it
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
-        self.update_window_position()
-            
-        self.is_running = True
-        self.update_frame()
+        # Create control buttons frame
+        self.controls_frame = ctk.CTkFrame(self)
+        self.controls_frame.pack(fill="x", pady=5)
+        
+        # Play/Pause button
+        self.play_pause_btn = ctk.CTkButton(
+            self.controls_frame,
+            text="Play",
+            width=80,
+            command=self.toggle_play_pause
+        )
+        self.play_pause_btn.pack(side="left", padx=5)
+        
+        # Bind events
+        self.player.bind("<<Ended>>", self.handle_video_end)
 
-    def update_frame(self):
-        if self.is_running and self.cap and not self.is_paused:
-            ret, frame = self.cap.read()
-            if ret:
-                # Loop video if at end
-                if self.video_source and not isinstance(self.video_source, int):
-                    if self.cap.get(cv2.CAP_PROP_POS_FRAMES) == self.cap.get(cv2.CAP_PROP_FRAME_COUNT):
-                        self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    def start_video(self):
+        try:
+            self.player.load(self.video_source)
+            if self.log_console:
+                self.log_console.log(f"Loaded video source: {self.video_source}")
+            self.is_running = True
+            self.play_pause_btn.configure(text="Pause")
+            self.player.play()
+        except Exception as e:
+            if self.log_console:
+                self.log_console.log(f"Error loading video: {str(e)}", level="error")
 
-                # Get placeholder dimensions
-                width = self.placeholder.winfo_width()
-                height = self.placeholder.winfo_height()
-                
-                if width > 1 and height > 1:
-                    # Resize frame to match placeholder size
-                    frame = cv2.resize(frame, (width, height))
-                    
-                    # Show the frame
-                    cv2.imshow(self.window_name, frame)
-                    cv2.waitKey(1)
+    def toggle_play_pause(self):
+        if self.is_paused:
+            self.player.play()
+            self.play_pause_btn.configure(text="Pause")
+            self.is_paused = False
+        else:
+            self.player.pause()
+            self.play_pause_btn.configure(text="Play")
+            self.is_paused = True
 
-            # Schedule next frame
-            self.after(self.delay, self.update_frame)
-        elif self.is_running:  # If paused, keep checking
-            self.after(100, self.update_frame)
 
-    def update_window_position(self, event=None):
-        """Update OpenCV window position to match placeholder position"""
-        if hasattr(self, 'window_name'):
-            # Get the placeholder's screen coordinates
-            x = self.placeholder.winfo_rootx()
-            y = self.placeholder.winfo_rooty()
-            width = self.placeholder.winfo_width()
-            height = self.placeholder.winfo_height()
-            
-            # Resize and move OpenCV window
-            if width > 1 and height > 1:  # Ensure valid dimensions
-                cv2.resizeWindow(self.window_name, width, height)
-                cv2.moveWindow(self.window_name, x, y)
+    def handle_video_end(self, event):
+        # Loop the video
+        if self.video_source and not isinstance(self.video_source, int):
+            self.player.play()
 
     def stop_video(self):
-        self.is_running = False
-        if self.cap:
-            self.cap.release()
-            self.cap = None
-        cv2.destroyWindow(self.window_name)
+        if self.is_running:
+            self.player.stop()
+            self.is_running = False
+            self.is_paused = False
 
     def __del__(self):
         self.stop_video()
@@ -757,10 +733,6 @@ class ModelDownloadDialog(ctk.CTkToplevel):
             text=f"Downloading model for {self.model.race_id}"
         ).pack(pady=10)
         
-        self.progress_bar = ctk.CTkProgressBar(self)
-        self.progress_bar.pack(pady=10)
-        self.progress_bar.set(0)
-        
         self.status_label = ctk.CTkLabel(self, text="Starting download...")
         self.status_label.pack(pady=5)
         
@@ -768,7 +740,6 @@ class ModelDownloadDialog(ctk.CTkToplevel):
     
     def simulate_download(self, progress=0):
         if progress <= 1:
-            self.progress_bar.set(progress)
             self.status_label.configure(
                 text=f"Downloading... ({int(progress * 100)}%)"
             )
