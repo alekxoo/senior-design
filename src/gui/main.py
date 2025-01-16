@@ -41,8 +41,8 @@ class PTZControlGUI:
 
         # Video Feed
         # camera index for video feed / video file path for video 
-        self.video_feed = VideoFeed(left_panel, video_source=harris_hill_video, log_console=self.log_console)
-        # self.video_feed = VideoFeed(left_panel, video_source=0)  # Default/built-in webcam
+        # self.video_feed = VideoFeed(left_panel, video_source=harris_hill_video, log_console=self.log_console)
+        self.video_feed = VideoFeed(left_panel, video_source=0, log_console=self.log_console)  # Default/built-in webcam
         self.video_feed.pack(fill="both", expand=True)
         
         # Recording Controls
