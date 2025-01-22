@@ -113,7 +113,8 @@ def main():
     print(f"Using device: {device}")
 
     #Tested loading the default weights trained on COCO but started to classify everything so use carbest for now and then finetune later to just detect vehicle objects
-    yolov5_model_path = "./models/carbest.pt"  # grab yolov5 model weights
+    #TODO: train yolov5 model on generic vehicle database to grab all vehicle objects and pass into cnn model for deeper classification
+    yolov5_model_path = "./models/yolov5s.pt"  # grab yolov5 model weights
     classification_model_path = "./CNNModels/best.pt"  # grab cnn model weights file
 
     #load model weights for both the detection and classification layers
