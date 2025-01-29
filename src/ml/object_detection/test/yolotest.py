@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 
 # Load the YOLOv5 model
-model = yolov5.load('./models/carbest.pt')
+model = yolov5.load('./models/yolov5s.pt')
 
 # Set model parameters
 model.conf = 0.25  # NMS confidence threshold

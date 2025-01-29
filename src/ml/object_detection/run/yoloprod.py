@@ -142,17 +142,26 @@ from torchvision import models, transforms
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 from ultralytics import YOLO  # Using YOLOv9
+import yaml
 import warnings
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
+def load_yaml(file_path):
+    with open(file_path, 'r') as file:
+        data = yaml.safe_load(file)
+    return data
 
+def parse_class_data(data):
+    class_labels = [cls['label'] for cls in data['classes']]
+    num_classes = data['num_classes']
+    return class_labels, num_classes
 
-def load_classification_model(model_path, device):
+def load_classification_model(model_path, device, classes):
     try:
         model = models.resnet18(weights='IMAGENET1K_V1')
         num_ftrs = model.fc.in_features
-        model.fc = nn.Linear(num_ftrs, 5)  # Assuming 5 classes
+        model.fc = nn.Linear(num_ftrs, classes)
         model.load_state_dict(torch.load(model_path))
         model = model.to(device)
         model.eval()
@@ -171,9 +180,8 @@ def load_yolov9_model(model_path):
         print(f"Error loading YOLOv9 model: {e}")
         return None
 
-class_labels = ['mazda', 'audi', 'bmw', 'lexus', 'toyota']
 
-def infer_webcam(yolov9_model, classification_model, device):
+def infer_webcam(yolov9_model, classification_model, device, labels):
     cap = cv2.VideoCapture(0)
     
     transform = transforms.Compose([
@@ -206,7 +214,7 @@ def infer_webcam(yolov9_model, classification_model, device):
                         with torch.no_grad():
                             output = classification_model(roi_tensor)
                             _, pred_class = torch.max(output, 1)
-                            predicted_class_name = class_labels[pred_class.item()]
+                            predicted_class_name = labels[pred_class.item()]
 
                         label = f"{predicted_class_name} ({conf:.2f})"
                         cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
@@ -229,17 +237,40 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    yolov9_model_path = "yolov9c.pt"
+    yolov9_model_path = "./config/yolov9c.pt"
     classification_model_path = "./CNNModels/best.pt"
 
+    yaml_data = load_yaml("./config/config_b490dad8.yaml") #dynamically load data from different sources (maybe include information from the user we want to load)
+    class_labels, num_classes = parse_class_data(yaml_data)
+    print("Class labels:", class_labels)
+    print("Number of classes:", num_classes)
+
     yolov9_model = load_yolov9_model(yolov9_model_path)
-    classification_model = load_classification_model(classification_model_path, device)
+    classification_model = load_classification_model(classification_model_path, device, num_classes)
 
     if yolov9_model is None or classification_model is None:
         print("Failed to load one or more models.")
         return
 
-    infer_webcam(yolov9_model, classification_model, device)
+    infer_webcam(yolov9_model, classification_model, device, class_labels)
 
 if __name__ == '__main__':
     main()
+
+
+"""
+Notes for software dev:
+- When getting information from new user-probably follow this workload
+    - get user name/ID if needed
+    - get number of cars they are uploading(not # of photos but how many unique cars)
+    - get user to add labels for each class of cars
+    - get user to upload images
+    - Use the yamlGen.py file to generate the yaml file and store in the database under their name
+
+ML dev:
+ When training:
+    - obtain images from the database along with the respective yaml file generated
+    - EDIT training script to use labels and num_classes from yaml into our variables
+When running:
+    -Use the yaml file again to use labels and num_classes
+"""
