@@ -181,9 +181,9 @@ def load_yolov9_model(model_path):
         return None
 
 
-def infer_webcam(yolov9_model, classification_model, device, labels):
+def infer_webcam(yolov9_model, classification_model, device, labels, class_conf_threshold=0.7):
     cap = cv2.VideoCapture(0)
-    
+
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
@@ -206,17 +206,28 @@ def infer_webcam(yolov9_model, classification_model, device, labels):
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     conf = box.conf[0].item()
 
-                    if conf > 0.7:
+                    if conf > 0.7:  # YOLOv9 confidence threshold
                         roi = img_rgb[y1:y2, x1:x2]
                         roi_pil = Image.fromarray(roi)
                         roi_tensor = transform(roi_pil).unsqueeze(0).to(device)
 
                         with torch.no_grad():
                             output = classification_model(roi_tensor)
-                            _, pred_class = torch.max(output, 1)
+                            # Get the probabilities of all classes
+                            probabilities = torch.softmax(output, dim=1)
+                            max_prob, pred_class = torch.max(probabilities, 1)
                             predicted_class_name = labels[pred_class.item()]
 
-                        label = f"{predicted_class_name} ({conf:.2f})"
+                            # Convert the Tensor to float for string formatting
+                            max_prob = max_prob.item()  # Convert Tensor to float
+
+                            # Apply confidence threshold for classification
+                            if max_prob >= class_conf_threshold:
+                                label = f"{predicted_class_name} ({max_prob:.2f})"
+                            else:
+                                label = f"Unknown ({max_prob:.2f})"  # Use 'Unknown' if confidence is low
+
+                        # Draw bounding box and label
                         cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
                         cv2.putText(annotated_frame, label, (x1, y1 - 10), 
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
@@ -231,6 +242,7 @@ def infer_webcam(yolov9_model, classification_model, device, labels):
 
     cap.release()
     cv2.destroyAllWindows()
+
 
 def main():
     cudnn.benchmark = True

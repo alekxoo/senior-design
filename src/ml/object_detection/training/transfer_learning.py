@@ -90,7 +90,8 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25, patience=
                 scheduler.step()
 
             epoch_loss = running_loss / dataset_sizes[phase]
-            epoch_acc = running_corrects.double() / dataset_sizes[phase]
+            epoch_acc = running_corrects.float() / dataset_sizes[phase] #changed to float for mps use
+            # epoch_acc = running_corrects.double() / dataset_sizes[phase]
 
             print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
 
@@ -185,7 +186,9 @@ def main():
     dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
     class_names = image_datasets['train'].classes
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu") #edited this to use mps instead of cpu, change later.
+    print(device)
+    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Get a batch of training data
     inputs, classes = next(iter(dataloaders['train']))
@@ -232,6 +235,9 @@ Notes:
     and the true distribution.
 -for scaling, think about saving each weight .pt file for each user and replace based on if they want to keep
     or replace their old saved configurations in a bucket
+
+TODO:
+- When training on 1 class, accuracy goes to 1, need negative data/class to set a threshold
 """
 
 
