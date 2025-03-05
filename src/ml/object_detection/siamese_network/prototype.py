@@ -159,8 +159,7 @@ def detect_cars(frame):
     img = img.to(next(yolo_model.parameters()).device)
     
     with torch.no_grad():
-        pred = yolo_model(img)[0]
-    
+
     # Apply NMS
     pred = non_max_suppression(pred, conf_thres=0.3, iou_thres=0.45, classes=[2])  # class 2 is typically 'car' in COCO
     
@@ -202,11 +201,62 @@ def main():
             break
         try:
             processed_frame = process_frame(frame)
-            cv2.imshow('Frame', processed_frame)
-        except Exception as e:
-            print(f"Error processing frame: {e}")
-            break
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+            cv2.imshow('Frame', processed_frame)Using device: cpu
+Training:   0%|                                                                                                                                                                                                                                                                                       | 0/8 [00:00<?, ?it/s]Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/TOYOTA_Rav4_2018Present/TOYOTA-Rav4-6293_95.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/TOYOTA_Rav4_2018Present/TOYOTA-Rav4-6293_15.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/AUDI_A7_Sportback_2017Present/AUDI-A7-Sportback-6152_11.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/AUDI_A7_Sportback_2017Present/AUDI-A7-Sportback-6152_43.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/BMW_7_Series_2022Present/bmw-7-series-2022-7253_74.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/LEXUS_NX_20142017/LEXUS-NX-5210_29.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/BMW_7_Series_2022Present/bmw-7-series-2022-7253_184.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/2020_Mazda_MX30/MAZDA-MX-30-6707_174.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/AUDI_A7_Sportback_2017Present/AUDI-A7-Sportback-6152_77.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/TOYOTA_Rav4_2018Present/TOYOTA-Rav4-6293_24.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/BMW_7_Series_2022Present/bmw-7-series-2022-7253_140.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/BMW_7_Series_2022Present/bmw-7-series-2022-7253_99.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/LEXUS_NX_20142017/LEXUS-NX-5210_52.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/BMW_7_Series_2022Present/bmw-7-series-2022-7253_173.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/2020_Mazda_MX30/MAZDA-MX-30-6707_103.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/TOYOTA_Rav4_2018Present/toyota-rav4-2018-6293_172.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/BMW_7_Series_2022Present/bmw-7-series-2022-7253_96.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/AUDI_A7_Sportback_2017Present/AUDI-A7-Sportback-6152_89.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/2020_Mazda_MX30/MAZDA-MX-30-6707_136.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/BMW_7_Series_2022Present/bmw-7-series-2022-7253_116.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/BMW_7_Series_2022Present/bmw-7-series-2022-7253_58.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/BMW_7_Series_2022Present/bmw-7-series-2022-7253_164.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/AUDI_A7_Sportback_2017Present/AUDI-A7-Sportback-6152_96.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/TOYOTA_Rav4_2018Present/TOYOTA-Rav4-6293_94.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/AUDI_A7_Sportback_2017Present/AUDI-A7-Sportback-6152_9.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/BMW_7_Series_2022Present/bmw-7-series-2022-7253_138.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/2020_Mazda_MX30/MAZDA-MX-30-6707_170.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/LEXUS_NX_20142017/LEXUS-NX-5210_90.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/2020_Mazda_MX30/MAZDA-MX-30-6707_115.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/AUDI_A7_Sportback_2017Present/AUDI-A7-Sportback-6152_67.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/BMW_7_Series_2022Present/bmw-7-series-2022-7253_93.jpg or /
+Invalid file path: /home/machvision/Documents/senior_design/senior-design/src/ml/dataset/vehicle_images_vault/BMW_7_Series_2022Present/bmw-7-series-2022-7253_120.jpg or /
+Training:   0%|                                                                                                                                                                                                                                                                                       | 0/8 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "senior-design/src/ml/object_detection/siamese_network/siamese_train_script.py", line 267, in <module>
+    main()
+  File "senior-design/src/ml/object_detection/siamese_network/siamese_train_script.py", line 234, in main
+    train_loss = train(model, train_loader, criterion, optimizer, device)
+  File "senior-design/src/ml/object_detection/siamese_network/siamese_train_script.py", line 141, in train
+    for img1, img2, label in tqdm(train_loader, desc="Training"):
+  File "/home/machvision/Documents/senior_design/venv/lib/python3.8/site-packages/tqdm/std.py", line 1181, in __iter__
+    for obj in iterable:
+  File "/home/machvision/Documents/senior_design/venv/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 630, in __next__
+    data = self._next_data()
+  File "/home/machvision/Documents/senior_design/venv/lib/python3.8/site-packages/torch/utils/data/dataloader.py", line 673, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "/home/machvision/Documents/senior_design/venv/lib/python3.8/site-packages/torch/utils/data/_utils/fetch.py", line 55, in fetch
+    return self.collate_fn(data)
+  File "senior-design/src/ml/object_detection/siamese_network/siamese_train_script.py", line 216, in collate_fn
+    return torch.utils.data.dataloader.default_collate(batch)
+  File "/home/machvision/Documents/senior_design/venv/lib/python3.8/site-packages/torch/utils/data/_utils/collate.py", line 317, in default_collate
+    return collate(batch, collate_fn_map=default_collate_fn_map)
+  File "/home/machvision/Documents/senior_design/venv/lib/python3.8/site-packages/torch/utils/data/_utils/collate.py", line 137, in collate
+    elem = batch[0]
+IndexError: list index out of range
             break
     cap.release()
     cv2.destroyAllWindows()
