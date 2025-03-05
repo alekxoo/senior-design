@@ -504,77 +504,139 @@ class CameraSettingsPanel(ctk.CTkFrame):
     def on_fps_change(self, value):
         self.settings.fps = int(value)
 
-class VideoFeed(ctk.CTkFrame):
-    def __init__(self, parent, video_source=None, log_console=None, **kwargs):
+class ImageFeed(ctk.CTkFrame):
+    def __init__(self, parent, image_path=None, log_console=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.configure(fg_color="black")
         self.parent = parent
-        self.video_source = video_source
+        self.image_path = image_path
         self.log_console = log_console
-        self.is_running = False
-        self.is_paused = False
+        self.image_label = None
+        self.photo = None
         self.setup_ui()
         
-        if video_source is not None:
-            self.start_video()
+        if image_path is not None:
+            self.load_image(image_path)
 
     def setup_ui(self):
-        # Create the video player
-        self.player = TkinterVideo(master=self, scaled=True)
-        self.player.pack(expand=True, fill="both")
-        
-        # Create control buttons frame
-        self.controls_frame = ctk.CTkFrame(self)
-        self.controls_frame.pack(fill="x", pady=5)
-        
-        # Play/Pause button
-        self.play_pause_btn = ctk.CTkButton(
-            self.controls_frame,
-            text="Play",
-            width=80,
-            command=self.toggle_play_pause
-        )
-        self.play_pause_btn.pack(side="left", padx=5)
-        
-        # Bind events
-        self.player.bind("<<Ended>>", self.handle_video_end)
+        # Create the image label
+        self.image_label = ctk.CTkLabel(self, text="")
+        self.image_label.pack(expand=True, fill="both")
 
-    def start_video(self):
+    def load_image(self, image_path):
         try:
-            self.player.load(self.video_source)
+            # Open and resize image to fit the frame
+            image = Image.open(image_path)
+            
+            # Calculate aspect ratio preserving resize
+            frame_width = self.winfo_width()
+            frame_height = self.winfo_height()
+            
+            if frame_width > 1 and frame_height > 1:  # Only resize if frame has valid dimensions
+                img_ratio = image.size[0] / image.size[1]
+                frame_ratio = frame_width / frame_height
+                
+                if frame_ratio > img_ratio:
+                    new_height = frame_height
+                    new_width = int(frame_height * img_ratio)
+                else:
+                    new_width = frame_width
+                    new_height = int(frame_width / img_ratio)
+                
+                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            
+            # Convert to PhotoImage and keep reference
+            self.photo = ImageTk.PhotoImage(image)
+            self.image_label.configure(image=self.photo)
+            
             if self.log_console:
-                self.log_console.log(f"Loaded video source: {self.video_source}")
-            self.is_running = True
-            self.play_pause_btn.configure(text="Pause")
-            self.player.play()
+                self.log_console.log(f"Loaded image: {image_path}")
+                
         except Exception as e:
             if self.log_console:
-                self.log_console.log(f"Error loading video: {str(e)}", level="error")
+                self.log_console.log(f"Error loading image: {str(e)}", level="error")
 
-    def toggle_play_pause(self):
-        if self.is_paused:
-            self.player.play()
-            self.play_pause_btn.configure(text="Pause")
-            self.is_paused = False
-        else:
-            self.player.pause()
-            self.play_pause_btn.configure(text="Play")
-            self.is_paused = True
+    def on_resize(self, event=None):
+        """Call this when parent window is resized"""
+        if self.image_path:
+            self.load_image(self.image_path)
+
+    def clear_image(self):
+        """Clear the currently displayed image"""
+        self.image_label.configure(image="")
+        self.photo = None
+        
+# class VideoFeed(ctk.CTkFrame):
+#     def __init__(self, parent, video_source=None, log_console=None, **kwargs):
+#         super().__init__(parent, **kwargs)
+#         self.configure(fg_color="black")
+#         self.parent = parent
+#         self.video_source = video_source
+#         self.log_console = log_console
+#         self.is_running = False
+#         self.is_paused = False
+#         self.setup_ui()
+        
+#         if video_source is not None:
+#             self.start_video()
+
+#     def setup_ui(self):
+#         # Create the video player
+#         self.player = TkinterVideo(master=self, scaled=True)
+#         self.player.pack(expand=True, fill="both")
+        
+#         # Create control buttons frame
+#         self.controls_frame = ctk.CTkFrame(self)
+#         self.controls_frame.pack(fill="x", pady=5)
+        
+#         # Play/Pause button
+#         self.play_pause_btn = ctk.CTkButton(
+#             self.controls_frame,
+#             text="Play",
+#             width=80,
+#             command=self.toggle_play_pause
+#         )
+#         self.play_pause_btn.pack(side="left", padx=5)
+        
+#         # Bind events
+#         self.player.bind("<<Ended>>", self.handle_video_end)
+
+#     def start_video(self):
+#         try:
+#             self.player.load(self.video_source)
+#             if self.log_console:
+#                 self.log_console.log(f"Loaded video source: {self.video_source}")
+#             self.is_running = True
+#             self.play_pause_btn.configure(text="Pause")
+#             self.player.play()
+#         except Exception as e:
+#             if self.log_console:
+#                 self.log_console.log(f"Error loading video: {str(e)}", level="error")
+
+#     def toggle_play_pause(self):
+#         if self.is_paused:
+#             self.player.play()
+#             self.play_pause_btn.configure(text="Pause")
+#             self.is_paused = False
+#         else:
+#             self.player.pause()
+#             self.play_pause_btn.configure(text="Play")
+#             self.is_paused = True
 
 
-    def handle_video_end(self, event):
-        # Loop the video
-        if self.video_source and not isinstance(self.video_source, int):
-            self.player.play()
+#     def handle_video_end(self, event):
+#         # Loop the video
+#         if self.video_source and not isinstance(self.video_source, int):
+#             self.player.play()
 
-    def stop_video(self):
-        if self.is_running:
-            self.player.stop()
-            self.is_running = False
-            self.is_paused = False
+#     def stop_video(self):
+#         if self.is_running:
+#             self.player.stop()
+#             self.is_running = False
+#             self.is_paused = False
 
-    def __del__(self):
-        self.stop_video()
+#     def __del__(self):
+#         self.stop_video()
 
 class ModelSyncPanel(ctk.CTkFrame):
     def __init__(self, parent, on_model_download=None, **kwargs):
@@ -638,7 +700,7 @@ class ModelSyncPanel(ctk.CTkFrame):
                 race_id="RACE_125",
                 version="1.0.0",
                 timestamp="2024-03-03 15:45",
-                cars=["Mazda_MX30", "LEXUS_NX_2014", "AUDI_A7_2017", "TOYOTA_Rav4_2018", "BMW_7_2022"],
+                cars=["No.4 Stewart-Haas", "No. 9 Chevrolet Camaro ZL1", "No. 11 Toyota Camry", "No. 22 Ford Mustang", "No. 8 Chevrolet Camaro"],
                 model_size="200MB"
             )
         ]
