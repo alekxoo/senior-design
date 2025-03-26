@@ -20,6 +20,7 @@ class EarlyStopping:
         self.best_loss = None
         self.early_stop = False
         self.best_model_params = None
+        self.counter = 0
 
     def __call__(self, val_loss, model):
         if self.best_loss is None:
@@ -49,7 +50,7 @@ def imshow(inp, title=None):
     plt.pause(0.001)  # pause a bit so that plots are updated
 
 
-def train_model(model, criterion, optimizer, scheduler, num_epochs=25, patience=5, save_path='best.pt'):
+def train_model(model, criterion, optimizer, scheduler, num_epochs=25, patience=5, save_path='best2.pt'):
     since = time.time()
 
     #create instance of early stopping
@@ -163,13 +164,6 @@ def main():
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ]),
     }
-
-    """
-    the following lines of code may give the most trouble on AWS if we are pulling from buckets of images
-    current_dir gets the directory the code is running in
-    data_dir then finds the directory where the folder 'dataset is', within 'dataset' will be 'train/val' folders, may need to split images later when getting the user's images
-    once we are able to get the images into train/val folders then this should work
-    """
     current_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.join(os.path.dirname(current_dir), '../dataset')
 
