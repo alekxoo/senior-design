@@ -12,6 +12,7 @@ from tkVideoPlayer import TkinterVideo
 import customtkinter as ctk
 import threading
 import socket
+from customtkinter import CTkImage
 
 class RecordingState(Enum):
     STOPPED = "stopped"
@@ -189,6 +190,7 @@ class TrackingStatusBar(ctk.CTkFrame):
             self.update_status()
         
 
+
 class RecordingControls(ctk.CTkFrame):
     def __init__(self, parent, log_console=None, **kwargs):
         super().__init__(parent, **kwargs)
@@ -273,6 +275,8 @@ class RecordingControls(ctk.CTkFrame):
 
     def show_upload_dialog(self):
         UploadDialog(self)
+
+
 
 class UploadDialog(ctk.CTkToplevel):
     def __init__(self, parent):
@@ -504,139 +508,136 @@ class CameraSettingsPanel(ctk.CTkFrame):
     def on_fps_change(self, value):
         self.settings.fps = int(value)
 
-class ImageFeed(ctk.CTkFrame):
-    def __init__(self, parent, image_path=None, log_console=None, **kwargs):
+        
+
+
+class VideoFeed(ctk.CTkFrame):
+    def __init__(self, parent, video_source=0, log_console=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.configure(fg_color="black")
         self.parent = parent
-        self.image_path = image_path
+        self.video_source = video_source
         self.log_console = log_console
-        self.image_label = None
-        self.photo = None
+        self.is_running = False
+        self.is_paused = False
         self.setup_ui()
-        
-        if image_path is not None:
-            self.load_image(image_path)
+
+        if video_source is not None:
+            self.start_video()
 
     def setup_ui(self):
-        # Create the image label
-        self.image_label = ctk.CTkLabel(self, text="")
-        self.image_label.pack(expand=True, fill="both")
+    # Create the label to hold the video feed with expanded size
+        self.video_label = ctk.CTkLabel(
+            self, 
+            text="", 
+            fg_color="black"
+        )
+        self.video_label.pack(expand=True, fill="both")
+        
+        # Create control buttons frame
+        self.controls_frame = ctk.CTkFrame(self)
+        self.controls_frame.pack(fill="x", pady=5)
+        
+        # Play/Pause button - pack to the right instead of left
+        self.play_pause_btn = ctk.CTkButton(
+            self.controls_frame,
+            text="Play",
+            width=80,
+            command=self.toggle_play_pause
+        )
+        self.play_pause_btn.pack(side="right", padx=5)  # Changed from "left" to "right"
 
-    def load_image(self, image_path):
+    def start_video(self):
         try:
-            # Open and resize image to fit the frame
-            image = Image.open(image_path)
             
-            # Calculate aspect ratio preserving resize
-            frame_width = self.winfo_width()
-            frame_height = self.winfo_height()
-            
-            if frame_width > 1 and frame_height > 1:  # Only resize if frame has valid dimensions
-                img_ratio = image.size[0] / image.size[1]
-                frame_ratio = frame_width / frame_height
-                
-                if frame_ratio > img_ratio:
-                    new_height = frame_height
-                    new_width = int(frame_height * img_ratio)
-                else:
-                    new_width = frame_width
-                    new_height = int(frame_width / img_ratio)
-                
-                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            
-            # Convert to PhotoImage and keep reference
-            self.photo = ImageTk.PhotoImage(image)
-            self.image_label.configure(image=self.photo)
-            
-            if self.log_console:
-                self.log_console.log(f"Loaded image: {image_path}")
-                
+            self.cap = cv2.VideoCapture(self.video_source)
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 854)  # Set width to 1280
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)  # Set height to 720
+
+            if not self.cap.isOpened():
+                if self.log_console:
+                    self.log_console.log("Error: Could not open video source", level="error")
+                return
+
+            self.is_running = True
+            self.play_pause_btn.configure(text="Pause")
+            self.update_frame()  # Start updating frames
+
         except Exception as e:
             if self.log_console:
-                self.log_console.log(f"Error loading image: {str(e)}", level="error")
+                self.log_console.log(f"Error starting video: {str(e)}", level="error")
 
-    def on_resize(self, event=None):
-        """Call this when parent window is resized"""
-        if self.image_path:
-            self.load_image(self.image_path)
+    def update_frame(self):
+        if self.is_running:
+            ret, frame = self.cap.read()
+            if ret:
+                # Convert the frame from BGR to RGB
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                
+                # Get the current size of the container
+                container_width = self.video_label.winfo_width()
+                container_height = self.video_label.winfo_height()
+                
+                # Only resize if we have valid dimensions (after widget is fully created)
+                if container_width > 1 and container_height > 1:
+                    # Resize the frame to fit the container while maintaining aspect ratio
+                    frame_height, frame_width = frame.shape[:2]
+                    aspect_ratio = frame_width / frame_height
+                    
+                    # Calculate new dimensions to fit within container
+                    if container_width / container_height > aspect_ratio:
+                        # Container is wider than the video
+                        new_height = container_height
+                        new_width = int(new_height * aspect_ratio)
+                    else:
+                        # Container is taller than the video
+                        new_width = container_width
+                        new_height = int(new_width / aspect_ratio)
+                    
+                    # Resize the frame
+                    frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_AREA)
+                
+                # Convert to PIL Image
+                img = Image.fromarray(frame)
+                
+                # Create CTkImage with specific size
+                img_tk = CTkImage(
+                    light_image=img, 
+                    dark_image=img,
+                    size=(container_width, container_height)
+                )
+                
+                # Update the label
+                self.video_label.configure(image=img_tk, text="")
+                self.video_label.image = img_tk
+                
+            # Call this function again after 10ms
+            self.after(10, self.update_frame)
 
-    def clear_image(self):
-        """Clear the currently displayed image"""
-        self.image_label.configure(image="")
-        self.photo = None
-        
-# class VideoFeed(ctk.CTkFrame):
-#     def __init__(self, parent, video_source=None, log_console=None, **kwargs):
-#         super().__init__(parent, **kwargs)
-#         self.configure(fg_color="black")
-#         self.parent = parent
-#         self.video_source = video_source
-#         self.log_console = log_console
-#         self.is_running = False
-#         self.is_paused = False
-#         self.setup_ui()
-        
-#         if video_source is not None:
-#             self.start_video()
+    def toggle_play_pause(self):
+        if self.is_paused:
+            self.is_running = True
+            self.play_pause_btn.configure(text="Pause")
+            self.update_frame()  # Resume updating frames
+            self.is_paused = False
+        else:
+            self.is_running = False
+            self.play_pause_btn.configure(text="Play")
+            self.is_paused = True
 
-#     def setup_ui(self):
-#         # Create the video player
-#         self.player = TkinterVideo(master=self, scaled=True)
-#         self.player.pack(expand=True, fill="both")
-        
-#         # Create control buttons frame
-#         self.controls_frame = ctk.CTkFrame(self)
-#         self.controls_frame.pack(fill="x", pady=5)
-        
-#         # Play/Pause button
-#         self.play_pause_btn = ctk.CTkButton(
-#             self.controls_frame,
-#             text="Play",
-#             width=80,
-#             command=self.toggle_play_pause
-#         )
-#         self.play_pause_btn.pack(side="left", padx=5)
-        
-#         # Bind events
-#         self.player.bind("<<Ended>>", self.handle_video_end)
+    def stop_video(self):
+        if hasattr(self, 'cap') and self.cap.isOpened():
+            self.cap.release()
+            self.is_running = False
+            self.is_paused = False
 
-#     def start_video(self):
-#         try:
-#             self.player.load(self.video_source)
-#             if self.log_console:
-#                 self.log_console.log(f"Loaded video source: {self.video_source}")
-#             self.is_running = True
-#             self.play_pause_btn.configure(text="Pause")
-#             self.player.play()
-#         except Exception as e:
-#             if self.log_console:
-#                 self.log_console.log(f"Error loading video: {str(e)}", level="error")
-
-#     def toggle_play_pause(self):
-#         if self.is_paused:
-#             self.player.play()
-#             self.play_pause_btn.configure(text="Pause")
-#             self.is_paused = False
-#         else:
-#             self.player.pause()
-#             self.play_pause_btn.configure(text="Play")
-#             self.is_paused = True
+    def __del__(self):
+        self.stop_video()
 
 
-#     def handle_video_end(self, event):
-#         # Loop the video
-#         if self.video_source and not isinstance(self.video_source, int):
-#             self.player.play()
 
-#     def stop_video(self):
-#         if self.is_running:
-#             self.player.stop()
-#             self.is_running = False
-#             self.is_paused = False
 
-#     def __del__(self):
-#         self.stop_video()
+
 
 class ModelSyncPanel(ctk.CTkFrame):
     def __init__(self, parent, on_model_download=None, **kwargs):
