@@ -78,7 +78,7 @@ class VehicleTrackerApp:
         self.vehicle_position = tk.StringVar(value="N/A")
         
         # Video recording variables
-        self.recording = False
+        self.is_recording = False
         self.out = None  # For writing video
 
         # Schedule the first update of the webcam frame
@@ -103,10 +103,10 @@ class VehicleTrackerApp:
         self.recording_controls = ctk.CTkFrame(left_panel)
         self.recording_controls.pack(fill="x", pady=(0, 10))
 
-        self.record_button = ctk.CTkButton(self.recording_controls, text="Start Recording", command=self.start_recording)
+        self.record_button = ctk.CTkButton(self.recording_controls, text="Start Recording", command=self.record_and_save)
         self.record_button.pack(side="left", expand=True, padx=5)
 
-        self.save_button = ctk.CTkButton(self.recording_controls, text="Save Video", command=self.save_video, state="disabled")
+        self.save_button = ctk.CTkButton(self.recording_controls, text="Save Video", state="disabled")
         self.save_button.pack(side="right", expand=True, padx=5)
 
         # Right panel - Controls
@@ -177,38 +177,56 @@ class VehicleTrackerApp:
         if not self.tracking_enabled:
             self.vehicle_position.set("N/A")
 
-    def start_recording(self):
-        """Start video recording."""
-        if not self.recording:
-            self.recording = True
+    def record_and_save(self):
+        """Starts or stops recording video safely."""
+        if not self.is_recording:
+            self.is_recording = True
             self.record_button.configure(text="Stop Recording")
-            self.save_button.configure(state=tk.DISABLED)  # Disable save while recording
-            self.start_video_writer()
-        else:
-            self.recording = False
-            self.record_button.configure(text="Start Recording")
-            self.save_button.configure(state=tk.NORMAL)  # Enable save once stopped
 
-    def start_video_writer(self):
-        """Initialize video writer in a separate thread."""
-        def record_video():
+            # Initialize VideoWriter
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            self.out = cv2.VideoWriter('output_video.mp4', fourcc, 20.0, (1920, 1080))  # 1080p video
-            while self.recording:
-                ret, frame = self.cap.read()
-                if ret:
-                    self.out.write(frame)  # Write original 1080p frame to file
-                time.sleep(0.03)  # Approx 30 fps
+            self.video_writer = cv2.VideoWriter('output.mp4', fourcc, 30.0, (1920, 1080))
 
-            if self.out:
-                self.out.release()
+            # Start recording in a separate thread
+            self.recording_thread = threading.Thread(target=self.record_video, daemon=True)
+            self.recording_thread.start()
+        else:
+            self.is_recording = False
+            self.record_button.configure(text="Start Recording")
 
-        # Run video writer in a separate thread
-        threading.Thread(target=record_video, daemon=True).start()
+            # Stop recording thread safely
+            if self.recording_thread and self.recording_thread.is_alive():
+                self.recording_thread.join()
 
-    def save_video(self):
-        """Save video to file."""
-        print("Saving video...")
+            # Ensure VideoWriter is properly released
+            if self.video_writer:
+                self.video_writer.release()
+                self.video_writer = None  # Avoid accessing a released writer
+
+    def record_video(self):
+        """Continuously records video frames in memory."""
+        while self.is_recording:
+            ret, frame = self.cap.read()
+            if not ret:
+                break  # Stop if frame capture fails
+
+            # Ensure frame size matches VideoWriter size
+            frame = cv2.resize(frame, (1920, 1080))  
+
+            if self.video_writer:
+                self.video_writer.write(frame)
+
+            time.sleep(0.03)  # Control frame rate
+
+    def stop_recording(self):
+        """Stops recording safely."""
+        self.is_recording = False
+        if self.recording_thread and self.recording_thread.is_alive():
+            self.recording_thread.join()
+
+        if self.video_writer:
+            self.video_writer.release()
+            self.video_writer = None  # Prevent accidental access
 
     def update_frame(self):
         try:
