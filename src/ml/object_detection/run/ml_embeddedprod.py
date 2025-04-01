@@ -188,8 +188,13 @@ class VehicleTrackerApp:
             self.is_recording = True
             self.record_button.configure(text="Stop Recording")
 
+            # Get the actual frame rate from the camera
+            fps = self.cap.get(cv2.CAP_PROP_FPS)
+
+            print(fps)
+
             # Initialize VideoWriter safely
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            fourcc = cv2.VideoWriter_fourcc(*'avc1')
             self.video_writer = cv2.VideoWriter('output.mp4', fourcc, 30.0, (1920, 1080))
 
             if not self.video_writer.isOpened():
@@ -311,16 +316,22 @@ class VehicleTrackerApp:
                             roi_pil = Image.fromarray(roi)
                             roi_tensor = self.transform(roi_pil).unsqueeze(0).to(self.device)
 
+
+                            # Get classification result synchronously
+                            classification_result = self.classify_vehicle(roi_tensor)
+                            vehicle_class_name = classification_result.split(" ")[0]  # Extract just the class name
+
+
                             # Run classification in a separate thread
                             thread = Thread(target=lambda: vehicle_positions.append(
-                                f"Vehicle {idx+1}: {self.classify_vehicle(roi_tensor)} ({x_center}, {y_center})"
+                                f"Vehicle {idx+1}: {classification_result} ({x_center}, {y_center})"
                             ))
                             threads.append(thread)
                             thread.start()
 
                             # Draw bounding box
                             bbox_color = (255, 255, 255)  # Default white
-                            if self.tracking_enabled and self.selected_label.get() in self.class_labels: #TODO: update to where it changes green if label is the selected class
+                            if self.tracking_enabled and vehicle_class_name == self.selected_label.get(): #TODO: update to where it changes green if label is the selected class
                                 bbox_color = (0, 255, 0)  # Green for tracked vehicle
                                 vehicle_found = True
                                 self.vehicle_position.set(f"({x_center}, {y_center})")
