@@ -5,12 +5,14 @@ from PIL import Image, ImageTk
 from torchvision import models, transforms
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
+import torch.nn.functional as F
 from ultralytics import YOLO
 import yaml
 import warnings
 import tkinter as tk
 from tkinter import ttk, Label
 import threading
+from threading import Thread
 import time
 import customtkinter as ctk
 
@@ -32,6 +34,9 @@ class VehicleTrackerApp:
         self.root = root
         self.root.title("Vehicle Tracker")
         self.current_mode = tk.StringVar(value="autonomous")
+
+        #create a thread locker for recording
+        self.lock = threading.Lock()
 
         # Create a Label to display the video feed
         self.video_label = Label(self.root)
@@ -183,40 +188,67 @@ class VehicleTrackerApp:
             self.is_recording = True
             self.record_button.configure(text="Stop Recording")
 
-            # Initialize VideoWriter
+            # Initialize VideoWriter safely
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             self.video_writer = cv2.VideoWriter('output.mp4', fourcc, 30.0, (1920, 1080))
 
-            # Start recording in a separate thread
+            if not self.video_writer.isOpened():
+                print("⚠️ ERROR: VideoWriter failed to open!")
+                self.is_recording = False  # Reset flag
+                self.record_button.configure(text="Start Recording")
+                return
+
+            # Start recording in a new thread
             self.recording_thread = threading.Thread(target=self.record_video, daemon=True)
             self.recording_thread.start()
         else:
+            # First, set the flag to stop recording
             self.is_recording = False
+            self.record_button.configure(text="Starting Recording")
+            
+            # Give the thread time to exit gracefully
+            if hasattr(self, 'recording_thread') and self.recording_thread and self.recording_thread.is_alive():
+                self.recording_thread.join(timeout=2.0)  # Wait up to 2 seconds
+            
+            # Now it's safe to release resources
+            with self.lock:  # Use the lock you already defined
+                if hasattr(self, 'video_writer') and self.video_writer:
+                    self.video_writer.release()
+                    self.video_writer = None
+            
             self.record_button.configure(text="Start Recording")
-
-            # Stop recording thread safely
-            if self.recording_thread and self.recording_thread.is_alive():
-                self.recording_thread.join()
-
-            # Ensure VideoWriter is properly released
-            if self.video_writer:
-                self.video_writer.release()
-                self.video_writer = None  # Avoid accessing a released writer
 
     def record_video(self):
         """Continuously records video frames in memory."""
         while self.is_recording:
-            ret, frame = self.cap.read()
-            if not ret:
-                break  # Stop if frame capture fails
+            try:
+                ret, frame = self.cap.read()
+                if not ret:
+                    print("⚠️ WARNING: Frame capture failed!")
+                    time.sleep(0.01)  # Small delay to prevent CPU hogging
+                    continue  # Try again, don't break
+                    
+                # Create a copy of the frame to avoid modifying the original
+                frame_copy = frame.copy()
+                frame_copy = cv2.resize(frame_copy, (1920, 1080))
+                
+                # Use lock to ensure thread safety
+                with self.lock:
+                    if self.video_writer is not None and self.is_recording:
+                        self.video_writer.write(frame_copy)
+                
+                # Explicitly release the frame copy to help with memory management
+                del frame_copy
+                
+                # Control frame rate (30 FPS)
+                time.sleep(0.033)
+                
+            except Exception as e:
+                print(f"⚠️ ERROR in recording thread: {e}")
+                time.sleep(0.1)  # Add delay on error to prevent tight error loops
 
-            # Ensure frame size matches VideoWriter size
-            frame = cv2.resize(frame, (1920, 1080))  
 
-            if self.video_writer:
-                self.video_writer.write(frame)
 
-            time.sleep(0.03)  # Control frame rate
 
     def stop_recording(self):
         """Stops recording safely."""
@@ -227,6 +259,22 @@ class VehicleTrackerApp:
         if self.video_writer:
             self.video_writer.release()
             self.video_writer = None  # Prevent accidental access
+
+    #function to compute max logit of classification and entropy loss
+    def classify_vehicle(self, roi_tensor, logit_threshold=2, entropy_threshold=0.5):
+        """Runs CNN classification and applies both logit thresholding and entropy filtering."""
+        with torch.no_grad():
+            output = self.classification_model(roi_tensor)
+            probabilities = F.softmax(output, dim=1)
+
+            max_logit, pred_class = torch.max(output, 1)
+            predicted_class_name = self.class_labels[pred_class.item()]
+            max_logit = max_logit.item()
+            entropy = -torch.sum(probabilities * torch.log(probabilities + 1e-10)).item()
+
+            if max_logit < logit_threshold or entropy < entropy_threshold:
+                return f"Unknown ({max_logit:.2f}, entropy: {entropy:.2f})"
+            return f"{predicted_class_name} ({max_logit:.2f}, entropy: {entropy:.2f})"
 
     def update_frame(self):
         try:
@@ -243,57 +291,63 @@ class VehicleTrackerApp:
             # Run YOLO detection
             results = self.yolov9_model.predict(img_rgb, classes=[2], verbose=False, imgsz=480)
 
-            # Ensure results exist
             annotated_frame = img_resized.copy()
             vehicle_found = False
+            vehicle_positions = []
+            threads = []
 
             if hasattr(results[0], 'boxes') and len(results[0].boxes) > 0:
-                for box in results[0].boxes:
+                for idx, box in enumerate(results[0].boxes):
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     conf = box.conf[0].item()
 
                     if conf > 0.7:
-                        # Default bounding box color (white)
-                        bbox_color = (255, 255, 255)
-
-                        # Extract ROI and classify
+                        # Compute center coordinates
+                        x_center, y_center = (x1 + x2) // 2, (y1 + y2) // 2
+                        
+                        # Extract ROI for classification
                         roi = img_rgb[y1:y2, x1:x2]
                         if roi.size > 0:
                             roi_pil = Image.fromarray(roi)
                             roi_tensor = self.transform(roi_pil).unsqueeze(0).to(self.device)
 
-                            with torch.no_grad():
-                                output = self.classification_model(roi_tensor)
-                                pred_class = torch.argmax(output, dim=1).item()
-                                predicted_label = self.class_labels[pred_class]
+                            # Run classification in a separate thread
+                            thread = Thread(target=lambda: vehicle_positions.append(
+                                f"Vehicle {idx+1}: {self.classify_vehicle(roi_tensor)} ({x_center}, {y_center})"
+                            ))
+                            threads.append(thread)
+                            thread.start()
 
-                                # If tracking is enabled and this is the target vehicle, change bounding box to green
-                                if self.tracking_enabled and predicted_label == self.selected_label.get():
-                                    bbox_color = (0, 255, 0)  # Green for tracked vehicle
-                                    vehicle_found = True
-                                    x_center, y_center = (x1 + x2) // 2, (y1 + y2) // 2
-                                    self.vehicle_position.set(f"({x_center}, {y_center})")
+                            # Draw bounding box
+                            bbox_color = (255, 255, 255)  # Default white
+                            if self.tracking_enabled and self.selected_label.get() in self.class_labels: #TODO: update to where it changes green if label is the selected class
+                                bbox_color = (0, 255, 0)  # Green for tracked vehicle
+                                vehicle_found = True
+                                self.vehicle_position.set(f"({x_center}, {y_center})")
 
-                                # Display class label
-                                cv2.putText(annotated_frame, f"{predicted_label} ({conf:.2f})", (x1, y1 - 10),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), bbox_color, 2)
 
-                        # Draw bounding box with determined color
-                        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), bbox_color, 2)
+            # Wait for all classification threads to finish
+            for thread in threads:
+                thread.join()
+
+            # Display vehicle positions
+            y_offset = annotated_frame.shape[0] - 40
+            for position in vehicle_positions:
+                cv2.putText(annotated_frame, position, (10, y_offset),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                y_offset -= 30
 
             # Handle tracking status
             is_tracking_lost = self.tracking_enabled and not vehicle_found
             self.track_status.set("Tracking" if self.tracking_enabled and vehicle_found else
                                 "Lost" if is_tracking_lost else "Not Tracking")
-
             if is_tracking_lost:
                 self.vehicle_position.set("N/A")
 
             # Convert frame for Tkinter display
             frame_pil = Image.fromarray(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB))
             frame_tk = ImageTk.PhotoImage(frame_pil)
-
-            # Update label with the new frame
             self.video_label.configure(image=frame_tk)
             self.video_label.image = frame_tk
 
@@ -319,3 +373,14 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+    '''TODO: make two sections and buttons
+    section with button for models
+     - if button pressed, pull all available models from S3 Bucket and populate the models section
+     - Have a download button for each available model which is a command that will tell AWS to send the respective .pt weights and config yaml file
+
+    section with button for meta data
+     - if model is downloaded then parse yaml config file and add all data into the section 
+     - also populate the drop down menu to have the cars from the yaml file in order to select and track
+    '''
