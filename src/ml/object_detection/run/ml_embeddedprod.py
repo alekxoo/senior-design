@@ -188,13 +188,8 @@ class VehicleTrackerApp:
             self.is_recording = True
             self.record_button.configure(text="Stop Recording")
 
-            # Get the actual frame rate from the camera
-            fps = self.cap.get(cv2.CAP_PROP_FPS)
-
-            print(fps)
-
             # Initialize VideoWriter safely
-            fourcc = cv2.VideoWriter_fourcc(*'avc1')
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             self.video_writer = cv2.VideoWriter('output.mp4', fourcc, 30.0, (1920, 1080))
 
             if not self.video_writer.isOpened():
