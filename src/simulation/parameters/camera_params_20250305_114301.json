@@ -1,0 +1,17 @@
+{
+    "camera": {
+        "position_x": 650.0,
+        "position_y": 100.0,
+        "view_angle": 129.85,
+        "range": 745.75,
+        "rotation": 135.0,
+        "focal_length": 800.0,
+        "sensor_width": 640.0,
+        "sensor_height": 480.0
+    },
+    "car": {
+        "speed": 2.0,
+        "width": 30.0,
+        "height": 15.0
+    }
+}
