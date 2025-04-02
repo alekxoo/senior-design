@@ -222,7 +222,8 @@ class VehicleTrackerApp:
         """Continuously records video frames in memory."""
         while self.is_recording:
             try:
-                ret, frame = self.cap.read()
+                with self.lock:
+                    ret, frame = self.cap.read()
                 if not ret:
                     print("⚠️ WARNING: Frame capture failed!")
                     time.sleep(0.01)  # Small delay to prevent CPU hogging
@@ -241,7 +242,7 @@ class VehicleTrackerApp:
                 del frame_copy
                 
                 # Control frame rate (30 FPS)
-                time.sleep(0.033)
+                # time.sleep(0.033)
                 
             except Exception as e:
                 print(f"⚠️ ERROR in recording thread: {e}")
@@ -278,7 +279,8 @@ class VehicleTrackerApp:
 
     def update_frame(self):
         try:
-            ret, img = self.cap.read()
+            with self.lock:
+                ret, img = self.cap.read()
             if not ret:
                 print("Error: Could not read frame from webcam")
                 self.root.after(100, self.update_frame)
