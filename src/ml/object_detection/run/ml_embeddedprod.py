@@ -1,3 +1,4 @@
+import glob
 import torch
 import cv2
 import numpy as np
@@ -10,11 +11,18 @@ from ultralytics import YOLO
 import yaml
 import warnings
 import tkinter as tk
-from tkinter import ttk, Label
+from tkinter import ttk, Label, messagebox
 import threading
 from threading import Thread
 import time
 import customtkinter as ctk
+import guiComponents
+import os
+import boto3
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -28,12 +36,22 @@ def parse_class_data(data):
     num_classes = data['num_classes']
     return class_labels, num_classes
 
+def update_globals(username, racename):
+    global USERNAME, RACENAME
+    USERNAME = username
+    RACENAME = racename
+    print(f" Updated USERNAME to '{USERNAME}' and RACENAME to '{RACENAME}'")
+
 
 class VehicleTrackerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Vehicle Tracker")
         self.current_mode = tk.StringVar(value="autonomous")
+
+        #create instance of guiComponents for race info and model download, and also pass in s3 client for upload
+        self.race_info_section = guiComponents.ModelInfoComponents(self, on_model_download_success=update_globals)
+        self.s3 = self.race_info_section.s3
 
         #create a thread locker for recording
         self.lock = threading.Lock()
@@ -111,7 +129,7 @@ class VehicleTrackerApp:
         self.record_button = ctk.CTkButton(self.recording_controls, text="Start Recording", command=self.record_and_save)
         self.record_button.pack(side="left", expand=True, padx=5)
 
-        self.save_button = ctk.CTkButton(self.recording_controls, text="Save Video", state="disabled")
+        self.save_button = ctk.CTkButton(self.recording_controls, text="Save Video", command=self.upload_video_to_s3)
         self.save_button.pack(side="right", expand=True, padx=5)
 
         # Right panel - Controls
@@ -162,6 +180,9 @@ class VehicleTrackerApp:
             ctk.CTkLabel(self.mode_content_frame, textvariable=self.track_status, font=("Arial", 12)).pack()
             ctk.CTkLabel(self.mode_content_frame, text="Position:").pack()
             ctk.CTkLabel(self.mode_content_frame, textvariable=self.vehicle_position, font=("Arial", 12)).pack()
+            self.race_info_section.create_model_section(self.mode_content_frame)
+            self.race_info_section.create_race_info_section(self.mode_content_frame)
+
         
         elif self.current_mode.get() == "ptz":
             ctk.CTkLabel(self.mode_content_frame, text="PTZ Control", font=("Arial", 14)).pack()
@@ -188,9 +209,14 @@ class VehicleTrackerApp:
             self.is_recording = True
             self.record_button.configure(text="Stop Recording")
 
+            #create folder to store videos before uploading
+            output_folder = "VideoOutputs"
+            os.makedirs(output_folder, exist_ok=True)
+
             # Initialize VideoWriter safely
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            self.video_writer = cv2.VideoWriter('output.mp4', fourcc, 30.0, (1920, 1080))
+            output_path = os.path.join(output_folder, "output.mp4")
+            self.video_writer = cv2.VideoWriter(output_path, fourcc, 30.0, (1920, 1080))
 
             if not self.video_writer.isOpened():
                 print("⚠️ ERROR: VideoWriter failed to open!")
@@ -260,6 +286,53 @@ class VehicleTrackerApp:
         if self.video_writer:
             self.video_writer.release()
             self.video_writer = None  # Prevent accidental access
+
+
+
+    def upload_video_to_s3(self):
+        """
+        Uploads a video file to the specified S3 bucket under <username>/<racename>/video/.
+        Looks for 'VideoOutputs/output.mp4' in a sibling folder relative to the current script.
+        """
+
+        global USERNAME, RACENAME
+        # Get the directory where this script is located
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Construct the path to the video file relative to the script
+        video_path = os.path.join(current_dir, "..", "VideoOutputs", "output.mp4")
+        video_path = os.path.normpath(video_path)  # Clean up the path
+
+        # Validate video file
+        if not os.path.isfile(video_path):
+            print(f"Error: File '{video_path}' not found.")
+            return
+        # Extract the filename from the path
+        video_filename = os.path.basename(video_path)
+
+        # Check file extension
+        valid_extensions = (".mp4", ".mov", ".avi", ".mkv")
+        if not video_filename.lower().endswith(valid_extensions):
+            print("Error: Invalid file format. Allowed formats: .mp4, .mov, .avi, .mkv")
+            return
+
+
+        # Retrieve bucket name from environment variable
+        bucket_name = os.getenv("S3_RACES_BUCKET_NAME")
+        if not bucket_name:
+            print("Error: S3_RACES_BUCKET_NAME environment variable is not set.")
+            return
+        
+        # Construct the S3 key (path in S3 bucket)
+        s3_key = f"{USERNAME}/{RACENAME}/video/{video_filename}"
+
+        try:
+            # Upload the video
+            self.s3.upload_file(video_path, bucket_name, s3_key)
+            messagebox.showinfo("Success", "Video has been uploaded to the cloud!")
+            print(f"Upload successful: s3://{bucket_name}/{USERNAME}/{RACENAME}/video/")
+        except Exception as e:
+            messagebox.showinfo("Fail", f"Upload failed: {e}")
 
     #function to compute max logit of classification and entropy loss
     def classify_vehicle(self, roi_tensor, logit_threshold=2, entropy_threshold=0.5):
@@ -367,10 +440,28 @@ class VehicleTrackerApp:
 
     def on_closing(self):
         print("Shutting down...")
+
+        # Release camera
         if self.cap.isOpened():
             self.cap.release()
         cv2.destroyAllWindows()
+
+        # #delete video if it exists
+        # try:
+        #     video_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "VideoOutputs", "output.mp4")
+        #     video_path = os.path.normpath(video_path)
+
+        #     if os.path.exists(video_path):
+        #         os.remove(video_path)
+        #         messagebox.showinfo("Success: ",f"Deleted video: {video_path}")
+        #     else:
+        #         messagebox.showwarning("Warning:","No video found to delete.")
+        # except Exception as e:
+        #     messagebox.showerror("Error:",f"Error deleting video: {e}")
+
+        # Close the app window
         self.root.destroy()
+
 
 
 def main():

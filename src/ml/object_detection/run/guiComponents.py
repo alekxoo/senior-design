@@ -1,29 +1,69 @@
 import customtkinter as ctk
+import boto3, os #import libraries to run retrieve and upload functions to S3 bucket
+from tkinter import messagebox
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+"""
+TODO: when retrieving model, instead of pulling all models, just include text box and use string input to search for model and retrieve pt and yaml file
+should just be a race code
+
+
+TODO: include a parsing function to parse the retrieved config yaml file
+"""
+
+
 
 class ModelInfoComponents:
     """Class containing methods for model browsing and race information UI components"""
     
-    def __init__(self, parent):
+    def __init__(self, parent, on_model_download_success=None):
         """Initialize with parent container"""
         self.parent = parent
         self.model_list = None
         self.race_info = None
+
+        self.on_model_download_success = on_model_download_success
+
+        self.s3 = boto3.client(
+            's3',
+            aws_access_key_id=os.getenv("S3_ACCESS_KEY"),
+            aws_secret_access_key=os.getenv("S3_SECRET_ACCESS_KEY"),
+            region_name=os.getenv("AWS_REGION_NAME")
+        )
     
     def create_model_section(self, container):
-        """Creates the model browser section"""
+        """Creates the model browser section with username and racename input"""
         # Model section frame
         model_section = ctk.CTkFrame(container)
         model_section.pack(fill="x", pady=10, padx=10)
         
         # Header for model section
-        model_header = ctk.CTkLabel(model_section, text="Available Models", font=("Arial", 14, "bold"))
+        model_header = ctk.CTkLabel(model_section, text="Search Models by User & Race", font=("Arial", 14, "bold"))
         model_header.pack(anchor="w", padx=10, pady=5)
         
-        # Search button
-        search_btn = ctk.CTkButton(model_section, text="Search Models", 
-                                  command=self.search_models)
-        search_btn.pack(fill="x", padx=10, pady=5)
-        
+        # Username input
+        username_frame = ctk.CTkFrame(model_section)
+        username_frame.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(username_frame, text="Username:").pack(side="left", padx=5)
+        self.username_entry = ctk.CTkEntry(username_frame)
+        self.username_entry.pack(side="left", fill="x", expand=True, padx=5)
+
+        # Race name input
+        racename_frame = ctk.CTkFrame(model_section)
+        racename_frame.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(racename_frame, text="Race Name:").pack(side="left", padx=5)
+        self.racename_entry = ctk.CTkEntry(racename_frame)
+        self.racename_entry.pack(side="left", fill="x", expand=True, padx=5)
+
+        # Submit button
+        submit_btn = ctk.CTkButton(model_section, text="Submit", 
+                                command=self.handle_submit)
+        submit_btn.pack(fill="x", padx=10, pady=5)
+
         # Scrollable frame for model list
         model_list_container = ctk.CTkFrame(model_section)
         model_list_container.pack(fill="both", expand=True, padx=5, pady=5)
@@ -32,7 +72,77 @@ class ModelInfoComponents:
         self.model_list = self.ModelListFrame(model_list_container)
         self.model_list.pack(fill="both", expand=True)
 
+    def handle_submit(self):
+        #TODO: when submitting create handler to ensure that the old weights and yaml file are deleted before pulling new files from S3
+        """Handles the submit button press"""
+        username = self.username_entry.get().strip()
+        racename = self.racename_entry.get().strip()
+        
+        if not username or not racename:
+            print("Please enter both Username and Race Name.")
+            return
+        
+        # Then download config and weights files
+        current_dir = os.getcwd()
+        download_path = os.path.join(current_dir, "config") #download files and store in config folder in object_detection directory
+        os.makedirs(download_path, exist_ok=True)
+        print(download_path)
+
+        self.download_files(username, racename, download_path)
+
+    def download_files(self, username, racename, download_path):
+
+        #pass in aws client
+        s3 = self.s3
+        config_downloaded = False
+        weights_downloaded = False
+
+        """Download config and weights files from S3"""
+        # Retrieve bucket name from environment variable
+        bucket_name = os.getenv("S3_RACES_BUCKET_NAME")
+        if not bucket_name:
+            messagebox.showerror("Error", "S3_RACES_BUCKET_NAME environment variable is not set.")
+            return
+        
+        config_key = f"{username}/{racename}/config/"
+        weights_key = f"{username}/{racename}/weights/"
+        
+        # List objects in the config directory
+        config_objects = s3.list_objects_v2(Bucket=bucket_name, Prefix=config_key)
+        weights_objects = s3.list_objects_v2(Bucket=bucket_name, Prefix=weights_key)
+        
+        if 'Contents' in config_objects:
+            for obj in config_objects['Contents']:
+                if obj['Key'].endswith('.yaml'):
+                    config_filename = os.path.basename(obj['Key'])
+                    config_filepath = os.path.join(download_path, config_filename)
+                    s3.download_file(bucket_name, obj['Key'], config_filepath)
+                    # messagebox.showinfo("Message", f"Downloaded config file: {config_filepath}")
+                    config_downloaded = True
+                    break  # Only one config file expected
+        else:
+            messagebox.showerror("Error:","No config file found in S3.")
+        
+        if 'Contents' in weights_objects:
+            for obj in weights_objects['Contents']:
+                if obj['Key'].endswith('best.pt'):
+                    weights_filepath = os.path.join(download_path, 'best.pt')
+                    s3.download_file(bucket_name, obj['Key'], weights_filepath)
+                    # messagebox.showinfo("Message", f"Downloaded weights file: {weights_filepath}")
+                    weights_downloaded = True
+                    break  # Only one weights file expected
+        else:
+            messagebox.showerror("Error:","No weights file found in S3.")
+
+        if config_downloaded and weights_downloaded:
+            messagebox.showinfo("Success", "Both model files downloaded successfully!")
+            if self.on_model_download_success:
+                self.on_model_download_success(username, racename)  
+
+        #TODO: call parser to populate section with yaml file information
+
     def create_race_info_section(self, container):
+        #TODO:update this section with parse info from yaml file once successfully downloaded
         """Creates the race information section"""
         # Race info section frame
         race_section = ctk.CTkFrame(container)
@@ -52,19 +162,6 @@ class ModelInfoComponents:
             "Number of Cars": "Not loaded",
             "Version Number": "Not loaded"
         })
-
-    def search_models(self):
-        """Placeholder for model search functionality"""
-        # This would connect to S3 in the actual implementation
-        print("Searching for models...")
-        
-        # For demonstration, populate with dummy data
-        sample_models = [
-            {"name": "Model_2023_GT3", "size": "245MB", "date": "2023-10-15"},
-            {"name": "Model_2024_F1", "size": "312MB", "date": "2024-01-20"},
-            {"name": "Model_2024_Rally", "size": "189MB", "date": "2024-03-05"}
-        ]
-        self.model_list.populate_models(sample_models)
     
     class ModelListFrame(ctk.CTkScrollableFrame):
         """Custom scrollable frame for displaying available models."""
