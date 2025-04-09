@@ -87,6 +87,7 @@ class VehicleTrackerApp:
         ])
         
         # Initialize webcam
+        #TODO: use gstreamer here
         self.cap = cv2.VideoCapture(0)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)  # 1080p resolution
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080) # 1080p resolution
@@ -107,6 +108,8 @@ class VehicleTrackerApp:
         # Schedule the first update of the webcam frame
         self.create_ui()
         self.update_frame()
+
+        #TODO: create instance of PTZ stuff
 
     import customtkinter as ctk
 
@@ -378,7 +381,9 @@ class VehicleTrackerApp:
 
                     if conf > 0.7:
                         # Compute center coordinates
-                        x_center, y_center = (x1 + x2) // 2, (y1 + y2) // 2
+                        x_center, y_center = (x1 + x2) / 2*854 , (y1 + y2) / 2 * 480
+
+                        #TODO: call function 
                         
                         # Extract ROI for classification
                         roi = img_rgb[y1:y2, x1:x2]
@@ -401,7 +406,7 @@ class VehicleTrackerApp:
 
                             # Draw bounding box
                             bbox_color = (255, 255, 255)  # Default white
-                            if self.tracking_enabled and vehicle_class_name == self.selected_label.get(): #TODO: update to where it changes green if label is the selected class
+                            if self.tracking_enabled and vehicle_class_name == self.selected_label.get(): 
                                 bbox_color = (0, 255, 0)  # Green for tracked vehicle
                                 vehicle_found = True
                                 self.vehicle_position.set(f"({x_center}, {y_center})")
@@ -472,14 +477,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-    '''TODO: make two sections and buttons
-    section with button for models
-     - if button pressed, pull all available models from S3 Bucket and populate the models section
-     - Have a download button for each available model which is a command that will tell AWS to send the respective .pt weights and config yaml file
-
-    section with button for meta data
-     - if model is downloaded then parse yaml config file and add all data into the section 
-     - also populate the drop down menu to have the cars from the yaml file in order to select and track
-    '''
