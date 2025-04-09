@@ -70,7 +70,18 @@ class VehicleTrackerApp:
         
         # Load models
         print("Loading YOLOv9 model...")
-        self.yolov9_model = YOLO("./config/yolov9c.pt").to(self.device)
+        self.yolov9_model = YOLO("./config/yolov5su.pt").to(self.device)
+
+        #TODO: use later on jetson to test
+        # print("Loading YOLOv5su model...")
+        # self.yolov9_model = YOLO("./config/yolov5su.pt").to(self.device)
+
+        # # Export to TensorRT engine
+        # print("Exporting model to TensorRT engine...")
+        # self.yolov9_model.export(format="engine", device="cuda", half=True)
+
+        # self.yolov9_model = YOLO("yolov5su.engine")
+
         
         print("Loading classification model...")
         self.classification_model = models.resnet18(weights='IMAGENET1K_V1')
