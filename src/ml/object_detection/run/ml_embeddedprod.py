@@ -69,7 +69,7 @@ class VehicleTrackerApp:
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         
         # Load models
-        print("Loading YOLOv9 model...")
+        print("Loading YOLOv5su model...")
         self.yolov9_model = YOLO("./config/yolov5su.pt").to(self.device)
 
         #TODO: use later on jetson to test
