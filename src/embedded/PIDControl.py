@@ -8,7 +8,7 @@ from StepperControl import vel_x
 PX = 1.0
 IX = 0.5
 
-PY = 35.0
+PY = -50.0
 IY = 0.0
 
 i_x_acc = 0.0 #accumulated i_x value
