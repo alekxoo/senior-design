@@ -47,7 +47,14 @@ def set_speed(v):
 		step.ChangeFrequency(calc_pwm_freq(v))
 		step.ChangeDutyCycle(50)
 
-
-
 def stepper_shutdown():
 	sleep_.ChangeDutyCycle(0)
+
+
+def vel_x(v):
+	if v > 0:
+		set_dir(True)
+		set_speed(v)
+	else:
+		set_dir(False)
+		set_speed(-v)
