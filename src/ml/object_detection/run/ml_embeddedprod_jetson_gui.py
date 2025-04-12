@@ -294,7 +294,7 @@ class VehicleTrackerApp:
                 with self.lock:
                     ret, frame = self.cap.read()
                 if not ret:
-                    print(" WARNING: Frame capture failed!")
+                    print("WARNING: Frame capture failed!")
                     time.sleep(0.01)  # Small delay to prevent CPU hogging
                     continue  # Try again, don't break
                     
