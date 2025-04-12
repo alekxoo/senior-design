@@ -58,3 +58,8 @@ def vel_x(v):
 	else:
 		set_dir(False)
 		set_speed(-v)
+
+
+
+if __name__ == "__main__":
+	pass

@@ -6,6 +6,7 @@ import threading
 from Focuser import Focuser
 #use threads for I/O (blocking) calls
 f = Focuser(7)
+f.set(Focuser.OPT_MODE, 0x01) #turn on
 
 SERVO_ADDR = Focuser.OPT_MOTOR_Y
 servoReading = f.get(SERVO_ADDR)
@@ -19,3 +20,13 @@ def set_vel_y(v):
 	old_r = f.get(SERVO_ADDR)
 	servoReading = max(0, min(95, old_r + v)) #clamp between 0 and 95
 	f.set(SERVO_ADDR, servoReading)
+
+
+if __name__ == "__main__":
+	while True:
+		try:
+			inp = input("Enter change in angle (int) (non-numeric value = exit): ")
+			i = int(inp)
+			vel_y(i)
+		except:
+			break
