@@ -55,13 +55,19 @@ def stepper_shutdown():
 	gpio.output(sleep_pin, gpio.LOW)
 
 
+import threading
+
+
 def vel_x(v):
-	if v > 0:
-		set_dir(True)
-		set_speed(v)
-	else:
-		set_dir(False)
-		set_speed(-v)
+	def move_t(v):
+		if v > 0:
+			set_dir(True)
+			set_speed(v)
+		else:
+			set_dir(False)
+			set_speed(-v)
+	t = threading.Thread(target=move_t, args=(v,))
+	t.start()
 
 
 
