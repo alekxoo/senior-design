@@ -62,4 +62,10 @@ def vel_x(v):
 
 
 if __name__ == "__main__":
-	pass
+	while True:
+		try:
+			inp = input("Enter speed in Hz (float) (non-numeric value = exit): ")
+			i = float(inp)
+			vel_x(i)
+		except:
+			break
