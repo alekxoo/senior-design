@@ -23,7 +23,7 @@ def PID_reset():
 	i_x_acc = 0.0
 	i_y_acc = 0.0
 	#vel_x(0.0)
-	#vel_y(0.0)
+	vel_y(0.0)
 
 def PID(x_norm, y_norm, delta_time, detection):
 	global i_y_acc, i_x_acc
@@ -38,6 +38,6 @@ def PID(x_norm, y_norm, delta_time, detection):
 		x_diff = (x_norm - 0.5)
 		y_diff = (y_norm - 0.5)
 		#vel_x(IX*i_x_acc + PX*x_diff)
-		#vel_y(IY*i_y_acc + PY*y_diff)
+		vel_y(IY*i_y_acc + PY*y_diff)
 		i_x_acc += (delta_time * x_diff)
 		i_y_acc += (delta_time * y_diff)
