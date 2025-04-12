@@ -13,7 +13,7 @@ sleep_pin = -1 #TODO find a good pin
 
 gpio.setup(step_pwm_pin, gpio.OUT, initial=gpio.LOW)
 gpio.setup(dir_pin, gpio.OUT, initial=gpio.LOW)
-gpio.setp(sleep_pin, gpio.OUT, initial=gpio.LOW)
+gpio.setup(sleep_pin, gpio.OUT, initial=gpio.LOW)
 
 
 step = gpio.PWM(step_pwm_pin, 200) #freq is irrelevant here, since we change it to determine stepping speed
