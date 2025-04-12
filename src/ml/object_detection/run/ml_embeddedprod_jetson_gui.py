@@ -22,6 +22,10 @@ import os
 import boto3
 from dotenv import load_dotenv
 
+import sys
+sys.path.append("/home/machvision/Documents/senior-design/src/embedded")
+from PIDControl import PID, PID_reset
+
 load_dotenv()
 
 
@@ -126,16 +130,7 @@ class VehicleTrackerApp:
         
         # Initialize webcam
         #use gstreamer here
-        self.cap = cv2.VideoCapture(gstreamer_pipeline(
-            capture_width=4032,
-            capture_height=3040,
-            framerate=21,
-            display_width=1920,
-            display_height=1080,
-            flip_method=0), cv2.CAP_GSTREAMER)
-
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)  # 1080p resolution
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080) # 1080p resolution
+        self.cap = cv2.VideoCapture(gstreamer_pipeline(display_width=1920, display_height=1080, framerate=60, capture_width=1920, capture_height=1080), cv2.CAP_GSTREAMER)
         if not self.cap.isOpened():
             print("Error: Could not open webcam")
             return
@@ -426,9 +421,10 @@ class VehicleTrackerApp:
 
                     if conf > 0.7:
                         # Compute center coordinates
-                        x_center, y_center = (x1 + x2) / 2*854 , (y1 + y2) / 2 * 480
+                        x_center, y_center = (x1 + x2) / (2*854) , (y1 + y2) / (2 * 480)
 
                         #TODO: call function 
+                        PID(x_center, y_center, (1.0/60.0), True)
                         
                         # Extract ROI for classification
                         roi = img_rgb[y1:y2, x1:x2]
@@ -457,6 +453,8 @@ class VehicleTrackerApp:
                                 self.vehicle_position.set(f"({x_center}, {y_center})")
 
                             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), bbox_color, 2)
+                        else:
+                            PID(0.0, 0.0, (1.0/60.0), False) #call PID, say not detected
 
             # Wait for all classification threads to finish
             for thread in threads:
