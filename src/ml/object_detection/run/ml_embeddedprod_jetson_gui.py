@@ -414,6 +414,9 @@ class VehicleTrackerApp:
             vehicle_positions = []
             threads = []
 
+            tracking_vehicle_x = 0.0
+            tracking_vehicle_y = 0.0
+
             if hasattr(results[0], 'boxes') and len(results[0].boxes) > 0:
                 for idx, box in enumerate(results[0].boxes):
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -447,15 +450,11 @@ class VehicleTrackerApp:
                             if self.tracking_enabled and vehicle_class_name == self.selected_label.get(): 
                                 bbox_color = (0, 255, 0)  # Green for tracked vehicle
                                 vehicle_found = True
-                                #TODO: call function 
-                                PID(x_center, y_center, (1.0/60.0), True)
                                 self.vehicle_position.set(f"({x_center}, {y_center})")
-                            else:
-                                PID(0.0, 0.0, (1.0/60.0), False) #call PID, say not detected
+                                tracking_vehicle_x = x_center
+                                tracking_vehicle_y = y_center
 
                             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), bbox_color, 2)
-                    else:
-                        PID(0.0, 0.0, (1.0/60.0), False) #call PID, say not detected
 
             # Wait for all classification threads to finish
             for thread in threads:
@@ -474,6 +473,9 @@ class VehicleTrackerApp:
                                 "Lost" if is_tracking_lost else "Not Tracking")
             if is_tracking_lost:
                 self.vehicle_position.set("N/A")
+            
+            if self.tracking_enabled:
+                PID(tracking_vehicle_x, tracking_vehicle_y, (1.0 / 60.0), vehicle_found)
 
             # Convert frame for Tkinter display
             frame_pil = Image.fromarray(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB))
