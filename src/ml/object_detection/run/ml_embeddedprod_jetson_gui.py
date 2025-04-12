@@ -453,8 +453,8 @@ class VehicleTrackerApp:
                                 self.vehicle_position.set(f"({x_center}, {y_center})")
 
                             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), bbox_color, 2)
-                        else:
-                            PID(0.0, 0.0, (1.0/60.0), False) #call PID, say not detected
+                    else:
+                        PID(0.0, 0.0, (1.0/60.0), False) #call PID, say not detected
 
             # Wait for all classification threads to finish
             for thread in threads:
