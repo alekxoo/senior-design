@@ -27,6 +27,7 @@ def PID_reset():
 
 def PID(x_norm, y_norm, delta_time, detection):
 	global i_y_acc, i_x_acc
+	global time_since_last_detection
 	if not detection:
 		time_since_last_detection += 1
 		if time_since_last_detection > 60 and abs(i_x_acc) > 0 and abs(i_y_acc) > 0:
