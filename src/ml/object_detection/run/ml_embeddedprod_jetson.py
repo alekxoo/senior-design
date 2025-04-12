@@ -16,8 +16,8 @@ from tkinter import ttk
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 def gstreamer_pipeline(
-    capture_width=1280,
-    capture_height=720,
+    capture_width=1920,
+    capture_height=1080,
     display_width=640,
     display_height=360,
     framerate=60,
@@ -31,7 +31,7 @@ def gstreamer_pipeline(
         "nvvidconv flip-method=%d ! "
         "video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! "
         "videoconvert ! "
-        "video/x-raw, format=(string)BGR ! appsink"
+        "video/x-raw, format=(string)BGR ! appsink sync=0 drop=1"
         % (
             capture_width,
             capture_height,
@@ -57,7 +57,7 @@ class VehicleTrackerApp:
         self.root = root
         self.root.title("Vehicle Tracker")
         # Load configuration and models
-        yaml_data = load_yaml("../config/config_b490dad8.yaml")
+        yaml_data = load_yaml("./config/config_b490dad8.yaml")
         self.class_labels, num_classes = parse_class_data(yaml_data)
         
         # Set up device
@@ -69,19 +69,19 @@ class VehicleTrackerApp:
         # print("Loading YOLOv9 model...")
         # self.yolov9_model = YOLO("../config/yolov5su.pt").to(self.device)
         #TODO: use later on jetson to test
-        print("Loading YOLOv5su model...")
-        self.yolov9_model = YOLO("./config/yolov5su.pt").to(self.device)
+        #print("Loading YOLOv5su model...")
+        self.yolov9_model = YOLO("./config/yolov9c.pt").to(self.device)
 
         # Export to TensorRT engine
-        print("Exporting model to TensorRT engine...")
-        self.yolov9_model.export(format="engine", device="cuda", half=True)
+        #print("Exporting model to TensorRT engine...")
+        #self.yolov9_model.export(format="engine", device="cuda:0", half=True)
 
-        self.yolov9_model = YOLO("yolov5su.engine")
+        #self.yolov9_model = YOLO("yolov5su.engine")
         
         print("Loading classification model...")
         self.classification_model = models.resnet18(weights='IMAGENET1K_V1')
         self.classification_model.fc = nn.Linear(self.classification_model.fc.in_features, num_classes)
-        self.classification_model.load_state_dict(torch.load("../CNNModels/best.pt"))
+        self.classification_model.load_state_dict(torch.load("./CNNModels/best.pt"))
         self.classification_model.to(self.device)
         self.classification_model.eval()
         
