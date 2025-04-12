@@ -25,16 +25,17 @@ def PID_reset():
 	vel_y(0.0)
 
 def PID(x_norm, y_norm, delta_time, detection):
+	global i_y_acc, i_x_acc
 	if not detection:
 		time_since_last_detection += 1
-		if time_since_last_detection > 60:
+		if time_since_last_detection > 60 and abs(i_x_acc) > 0 and abs(i_y_acc) > 0:
 			PID_reset()
+			time_since_last_detection = 0
 	else:
 		time_since_last_detection = 0
-		global i_y_acc, i_x_acc
 		x_diff = (x_norm - 0.5)
 		y_diff = (y_norm - 0.5)
-		#vel_x(IX*i_x_acc + PX*x_diff)
+		vel_x(IX*i_x_acc + PX*x_diff)
 		vel_y(IY*i_y_acc + PY*y_diff)
 		i_x_acc += (delta_time * x_diff)
 		i_y_acc += (delta_time * y_diff)
