@@ -1,9 +1,6 @@
 import threading
 from Focuser import Focuser
 #use threads for I/O (blocking) calls
-
-
-
 f = Focuser(7)
 
 SERVO_ADDR = Focuser.OPT_MOTOR_Y
