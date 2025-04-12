@@ -9,7 +9,7 @@ gpio.setmode(gpio.BOARD)
 
 dir_pin = 33
 step_pwm_pin = 15
-sleep_pin = -1 #TODO find a good pin
+sleep_pin = 32 #TODO find a good pin
 
 gpio.setup(step_pwm_pin, gpio.OUT, initial=gpio.LOW)
 gpio.setup(dir_pin, gpio.OUT, initial=gpio.LOW)
