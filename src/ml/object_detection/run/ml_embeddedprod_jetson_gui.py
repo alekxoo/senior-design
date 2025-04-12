@@ -130,7 +130,7 @@ class VehicleTrackerApp:
         
         # Initialize webcam
         #use gstreamer here
-        self.cap = cv2.VideoCapture(gstreamer_pipeline(display_width=1920, display_height=1080, framerate=60, capture_width=1920, capture_height=1080), cv2.CAP_GSTREAMER)
+        self.cap = cv2.VideoCapture(gstreamer_pipeline(display_width=1920, display_height=1080, framerate=59, capture_width=1920, capture_height=1080), cv2.CAP_GSTREAMER)
         if not self.cap.isOpened():
             print("Error: Could not open webcam")
             return

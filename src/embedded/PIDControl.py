@@ -5,8 +5,8 @@
 from ServoControl import vel_y
 from StepperControl import vel_x
 
-PX = 1.0
-IX = 0.5
+PX = 3.0
+IX = 1.5
 
 PY = -20.0
 IY = 0.0
