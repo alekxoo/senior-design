@@ -16,6 +16,7 @@ import threading
 from threading import Thread
 import time
 import customtkinter as ctk
+import customtkinter as ctk
 import guiComponents
 import os
 import boto3
