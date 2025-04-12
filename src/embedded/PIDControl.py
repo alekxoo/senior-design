@@ -1,6 +1,9 @@
-#PID ctrl code
+#PID control library
+#Written by: Abdullah Alwakeel
+#Date: Apr 12 2025
 
-from ServoControl import vel_x
+from ServoControl import vel_y
+from StepperControl import vel_x
 
 PX = 0.5
 IX = 0.5
