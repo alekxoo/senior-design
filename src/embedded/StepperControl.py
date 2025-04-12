@@ -41,7 +41,7 @@ def set_dir(d):
 
 #one step per second = minimal speed
 def set_speed(v):
-	if v < (10.0 / num_steps): #minimal speed (Hz) = 10 steps per second
+	if v < 0: #minimal speed (Hz) = 10 steps per second
 		step.ChangeDutyCycle(0)
 		#sleep_.ChangeDutyCycle(0) #sleep is active low (0 = sleeping, 1 = not sleeping)
 		gpio.output(sleep_pin, gpio.LOW) #sleep
