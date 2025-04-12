@@ -18,7 +18,7 @@ def vel_y(v):
 def set_vel_y(v):
 	global servoReading
 	#old_r = f.get(SERVO_ADDR)
-	servoReading = max(65, min(145, servoReading + v)) #clamp between 0 and 95
+	servoReading = max(65, min(145, int(servoReading + v))) #clamp between 0 and 95)
 	f.set(SERVO_ADDR, servoReading, flag=0) #flag=0 means don't wait for response from device
 
 
