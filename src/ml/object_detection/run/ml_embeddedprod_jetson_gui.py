@@ -101,7 +101,7 @@ class VehicleTrackerApp:
         
         # Load models
         print("Loading YOLOv5su model...")
-        self.yolov9_model = YOLO("./config/yolov5su.pt").to(self.device)
+        self.yolov9_model = YOLO("./yoloModels/yolov5su.pt").to(self.device)
 
         #TODO: use later on jetson to test
         # print("Loading YOLOv5su model...")

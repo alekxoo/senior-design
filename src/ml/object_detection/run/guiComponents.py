@@ -132,7 +132,12 @@ class ModelInfoComponents:
         if config_downloaded and weights_downloaded:
             messagebox.showinfo("Success", "Both model files downloaded successfully!")
             if self.on_model_download_success:
-                self.on_model_download_success(username, racename)
+                self.on_model_download_success(
+                username,
+                racename,
+                yaml_path=config_filepath,
+                model_path=weights_filepath
+            )
 
     def create_race_info_section(self, container):
         """Creates the race information section"""
