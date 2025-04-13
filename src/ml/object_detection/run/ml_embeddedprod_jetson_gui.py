@@ -129,8 +129,8 @@ class VehicleTrackerApp:
         ])
         
         # Initialize webcam
-        #use gstreamer here
-        self.cap = cv2.VideoCapture(gstreamer_pipeline(display_width=1920, display_height=1080, framerate=59, capture_width=1920, capture_height=1080), cv2.CAP_GSTREAMER)
+        self.capture_framerate = 59
+        self.cap = cv2.VideoCapture(gstreamer_pipeline(display_width=1920, display_height=1080, framerate=self.capture_framerate, capture_width=1920, capture_height=1080), cv2.CAP_GSTREAMER)
         if not self.cap.isOpened():
             print("Error: Could not open webcam")
             return
@@ -172,7 +172,7 @@ class VehicleTrackerApp:
         self.record_button = ctk.CTkButton(self.recording_controls, text="Start Recording", command=self.record_and_save)
         self.record_button.pack(side="left", expand=True, padx=5)
 
-        self.save_button = ctk.CTkButton(self.recording_controls, text="Save Video", command=self.upload_video_to_s3)
+        self.save_button = ctk.CTkButton(self.recording_controls, text="Upload Video", command=self.upload_video_to_s3)
         self.save_button.pack(side="right", expand=True, padx=5)
 
         # Right panel - Controls
@@ -259,7 +259,7 @@ class VehicleTrackerApp:
             # Initialize VideoWriter safely
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             output_path = os.path.join(output_folder, "output.mp4")
-            self.video_writer = cv2.VideoWriter(output_path, fourcc, 30.0, (1920, 1080))
+            self.video_writer = cv2.VideoWriter(output_path, fourcc, self.capture_framerate, (1920, 1080))
 
             if not self.video_writer.isOpened():
                 print("ERROR: VideoWriter failed to open!")
