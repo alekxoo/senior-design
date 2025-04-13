@@ -86,7 +86,7 @@ class VehicleTrackerApp:
         print("Loading classification model...")
         self.classification_model = models.resnet18(weights='IMAGENET1K_V1')
         self.classification_model.fc = nn.Linear(self.classification_model.fc.in_features, num_classes)
-        self.classification_model.load_state_dict(torch.load("./CNNModels/best.pt"))
+        self.classification_model.load_state_dict(torch.load("./config/best.pt"))
         self.classification_model.to(self.device)
         self.classification_model.eval()
         
@@ -143,7 +143,7 @@ class VehicleTrackerApp:
         self.record_button = ctk.CTkButton(self.recording_controls, text="Start Recording", command=self.record_and_save)
         self.record_button.pack(side="left", expand=True, padx=5)
 
-        self.save_button = ctk.CTkButton(self.recording_controls, text="Save Video", command=self.upload_video_to_s3)
+        self.save_button = ctk.CTkButton(self.recording_controls, text="Upload Video", command=self.upload_video_to_s3)
         self.save_button.pack(side="right", expand=True, padx=5)
 
         # Right panel - Controls

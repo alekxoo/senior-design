@@ -117,7 +117,7 @@ class VehicleTrackerApp:
         print("Loading classification model...")
         self.classification_model = models.resnet18(weights='IMAGENET1K_V1')
         self.classification_model.fc = nn.Linear(self.classification_model.fc.in_features, num_classes)
-        self.classification_model.load_state_dict(torch.load("./CNNModels/best.pt"))
+        self.classification_model.load_state_dict(torch.load("./config/best.pt"))
         self.classification_model.to(self.device)
         self.classification_model.eval()
         
