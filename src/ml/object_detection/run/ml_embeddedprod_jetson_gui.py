@@ -280,70 +280,81 @@ class VehicleTrackerApp:
             self.is_recording = True
             self.record_button.configure(text="Stop Recording")
 
-            #create folder to store videos before uploading
             output_folder = "VideoOutputs"
             os.makedirs(output_folder, exist_ok=True)
 
-            # Initialize VideoWriter safely
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            output_path = os.path.join(output_folder, "output.mp4")
-            self.video_writer = cv2.VideoWriter(output_path, fourcc, self.capture_framerate, (1920, 1080))
+            self.temp_frames = []  # To store frames before writer is ready
+            self.frame_timestamps = []  # To calculate real FPS
+            self.actual_fps_computed = False
+            self.output_path = os.path.join(output_folder, "output.mp4")
+            self.video_writer = None  # We'll init it later
 
-            if not self.video_writer.isOpened():
-                print("ERROR: VideoWriter failed to open!")
-                self.is_recording = False  # Reset flag
-                self.record_button.configure(text="Start Recording")
-                return
-
-            # Start recording in a new thread
             self.recording_thread = threading.Thread(target=self.record_video, daemon=True)
             self.recording_thread.start()
         else:
-            # First, set the flag to stop recording
             self.is_recording = False
             self.record_button.configure(text="Starting Recording")
-            
-            # Give the thread time to exit gracefully
-            if hasattr(self, 'recording_thread') and self.recording_thread and self.recording_thread.is_alive():
-                self.recording_thread.join(timeout=2.0)  # Wait up to 2 seconds
-            
-            # Now it's safe to release resources
-            with self.lock:  # Use the lock you already defined
-                if hasattr(self, 'video_writer') and self.video_writer:
+
+            if hasattr(self, 'recording_thread') and self.recording_thread.is_alive():
+                self.recording_thread.join(timeout=2.0)
+
+            with self.lock:
+                if self.video_writer:
                     self.video_writer.release()
                     self.video_writer = None
-            
+
             self.record_button.configure(text="Start Recording")
 
+
     def record_video(self):
-        """Continuously records video frames in memory."""
+        """Continuously records video frames in memory, estimates actual FPS, and initializes writer."""
+        frame_count = 0
+        start_time = time.time()
+
         while self.is_recording:
             try:
                 with self.lock:
                     ret, frame = self.cap.read()
+
                 if not ret:
                     print("WARNING: Frame capture failed!")
-                    time.sleep(0.01)  # Small delay to prevent CPU hogging
-                    continue  # Try again, don't break
-                    
-                # Create a copy of the frame to avoid modifying the original
-                frame_copy = frame.copy()
-                frame_copy = cv2.resize(frame_copy, (1920, 1080))
-                
-                # Use lock to ensure thread safety
-                with self.lock:
-                    if self.video_writer is not None and self.is_recording:
-                        self.video_writer.write(frame_copy)
-                
-                # Explicitly release the frame copy to help with memory management
+                    time.sleep(0.01)
+                    continue
+
+                frame_copy = cv2.resize(frame.copy(), (1920, 1080))
+                current_time = time.time()
+
+                if not self.actual_fps_computed:
+                    self.temp_frames.append(frame_copy)
+                    self.frame_timestamps.append(current_time)
+                    frame_count += 1
+
+                    if current_time - start_time >= 2.0:  # Wait ~2 seconds to stabilize
+                        elapsed_time = self.frame_timestamps[-1] - self.frame_timestamps[0]
+                        estimated_fps = frame_count / elapsed_time
+                        estimated_fps = max(5, min(estimated_fps, 60))  # Clamp between 5 and 60
+                        print(f"Estimated FPS: {estimated_fps:.2f}")
+
+                        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                        self.video_writer = cv2.VideoWriter(self.output_path, fourcc, estimated_fps, (1920, 1080))
+
+                        for buffered_frame in self.temp_frames:
+                            self.video_writer.write(buffered_frame)
+
+                        self.temp_frames = []
+                        self.frame_timestamps = []
+                        self.actual_fps_computed = True
+                else:
+                    with self.lock:
+                        if self.video_writer and self.is_recording:
+                            self.video_writer.write(frame_copy)
+
                 del frame_copy
-                
-                # Control frame rate (30 FPS)
-                # time.sleep(0.033)
-                
+
             except Exception as e:
                 print(f"ERROR in recording thread: {e}")
-                time.sleep(0.1)  # Add delay on error to prevent tight error loops
+                time.sleep(0.1)
+
 
 
 
