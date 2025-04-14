@@ -381,7 +381,7 @@ class VehicleTrackerApp:
 
         try:
             # Upload the video
-            self.s3.upload_file(video_path, bucket_name, s3_key)
+            self.s3.upload_file(video_path, bucket_name, s3_key, ExtraArgs={'ContentType': 'video/quicktime'})
             messagebox.showinfo("Success", "Video has been uploaded to the cloud!")
             print(f"Upload successful: s3://{bucket_name}/{USERNAME}/{RACENAME}/video/")
         except Exception as e:
