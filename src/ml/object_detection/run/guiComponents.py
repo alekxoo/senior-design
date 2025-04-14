@@ -1,6 +1,7 @@
 import customtkinter as ctk
 import boto3, os  # import libraries to run retrieve and upload functions to S3 bucket
 from tkinter import messagebox
+import threading
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -182,11 +183,20 @@ class ModelInfoComponents:
 
                 self.race_buttons.append(row)
 
+        import threading
+
         def download_for_race(self, username, racename):
             current_dir = os.getcwd()
             download_path = os.path.join(current_dir, "config")
             os.makedirs(download_path, exist_ok=True)
-            self.outer.download_files(username, racename, download_path)
+
+            # Start download in a separate thread
+            threading.Thread(
+                target=self.outer.download_files,
+                args=(username, racename, download_path),
+                daemon=True  # Optional: terminates thread when main app exits
+            ).start()
+
 
     class RaceInfoFrame(ctk.CTkScrollableFrame):
         """Custom scrollable frame for displaying race information."""
