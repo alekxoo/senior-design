@@ -102,8 +102,8 @@ class VehicleTrackerApp:
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         
         # Load models
-        print("Loading YOLOv5su model...")
-        self.yolov9_model = YOLO("./yoloModels/yolov5su.pt").to(self.device)
+        print("Loading YOLOv9s model...")
+        self.yolov9_model = YOLO("./yoloModels/yolov9s.pt").to(self.device)
 
         # Load configuration and models
         # yaml_data = load_yaml("./config/config_b490dad8.yaml")
