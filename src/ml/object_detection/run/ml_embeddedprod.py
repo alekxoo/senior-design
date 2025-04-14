@@ -267,8 +267,8 @@ class VehicleTrackerApp:
             os.makedirs(output_folder, exist_ok=True)
 
             # Initialize VideoWriter safely
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            output_path = os.path.join(output_folder, "output.mp4")
+            fourcc = cv2.VideoWriter_fourcc(*'avc1')
+            output_path = os.path.join(output_folder, "output.mov")
             self.video_writer = cv2.VideoWriter(output_path, fourcc, 30.0, (1920, 1080))
 
             if not self.video_writer.isOpened():
@@ -353,7 +353,7 @@ class VehicleTrackerApp:
         current_dir = os.path.dirname(os.path.abspath(__file__))
 
         # Construct the path to the video file relative to the script
-        video_path = os.path.join(current_dir, "..", "VideoOutputs", "output.mp4")
+        video_path = os.path.join(current_dir, "..", "VideoOutputs", "output.mov")
         video_path = os.path.normpath(video_path)  # Clean up the path
 
         # Validate video file
@@ -529,7 +529,7 @@ class VehicleTrackerApp:
 
         # --- Delete video if it exists ---
         try:
-            video_path = os.path.join(script_dir, "..", "VideoOutputs", "output.mp4")
+            video_path = os.path.join(script_dir, "..", "VideoOutputs", "output.mov")
             video_path = os.path.normpath(video_path)
 
             print(f"Checking for video file at: {video_path}")

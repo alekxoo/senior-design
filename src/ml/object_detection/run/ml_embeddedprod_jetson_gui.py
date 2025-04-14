@@ -286,7 +286,7 @@ class VehicleTrackerApp:
             self.temp_frames = []  # To store frames before writer is ready
             self.frame_timestamps = []  # To calculate real FPS
             self.actual_fps_computed = False
-            self.output_path = os.path.join(output_folder, "output.mp4")
+            self.output_path = os.path.join(output_folder, "output.mov")
             self.video_writer = None  # We'll init it later
 
             self.recording_thread = threading.Thread(target=self.record_video, daemon=True)
@@ -335,7 +335,7 @@ class VehicleTrackerApp:
                         estimated_fps = max(5, min(estimated_fps, 60))  # Clamp between 5 and 60
                         print(f"Estimated FPS: {estimated_fps:.2f}")
 
-                        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                        fourcc = cv2.VideoWriter_fourcc(*'avc1')
                         self.video_writer = cv2.VideoWriter(self.output_path, fourcc, estimated_fps, (1920, 1080))
 
                         for buffered_frame in self.temp_frames:
@@ -382,7 +382,7 @@ class VehicleTrackerApp:
         current_dir = os.path.dirname(os.path.abspath(__file__))
 
         # Construct the path to the video file relative to the script
-        video_path = os.path.join(current_dir, "..", "VideoOutputs", "output.mp4")
+        video_path = os.path.join(current_dir, "..", "VideoOutputs", "output.mov")
         video_path = os.path.normpath(video_path)  # Clean up the path
 
         # Validate video file
@@ -564,7 +564,7 @@ class VehicleTrackerApp:
 
         # --- Delete video if it exists ---
         try:
-            video_path = os.path.join(script_dir, "..", "VideoOutputs", "output.mp4")
+            video_path = os.path.join(script_dir, "..", "VideoOutputs", "output.mov")
             video_path = os.path.normpath(video_path)
 
             print(f"Checking for video file at: {video_path}")
