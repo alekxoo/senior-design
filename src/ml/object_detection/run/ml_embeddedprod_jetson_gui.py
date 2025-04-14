@@ -41,12 +41,6 @@ def parse_class_data(data):
     num_classes = data['num_classes']
     return class_labels, num_classes
 
-def update_globals(username, racename):
-    global USERNAME, RACENAME
-    USERNAME = username
-    RACENAME = racename
-    print(f" Updated USERNAME to '{USERNAME}' and RACENAME to '{RACENAME}'")
-
 def gstreamer_pipeline(
     capture_width=1920,
     capture_height=1080,
@@ -75,13 +69,53 @@ def gstreamer_pipeline(
     )
 
 class VehicleTrackerApp:
+    def on_model_download_success(self, username, racename, yaml_path=None, model_path=None):
+        global USERNAME, RACENAME
+        USERNAME = username
+        RACENAME = racename
+        print(f"Updated USERNAME to '{USERNAME}' and RACENAME to '{RACENAME}'")
+
+        try:
+            # Load YAML
+            if yaml_path and os.path.isfile(yaml_path):
+                yaml_data = load_yaml(yaml_path)
+                self.class_labels, num_classes = parse_class_data(yaml_data)
+                print(f"Parsed YAML. Classes: {self.class_labels}")
+            else:
+                print("YAML path not valid.")
+                return 
+
+            # Load classification model
+            if model_path and os.path.isfile(model_path):
+                print(f"Loading CNN model from: {model_path}")
+                self.classification_model = models.resnet18(weights='IMAGENET1K_V1')
+                self.classification_model.fc = nn.Linear(self.classification_model.fc.in_features, num_classes)
+                self.classification_model.load_state_dict(torch.load(model_path, map_location=self.device))
+                self.classification_model.to(self.device)
+                self.classification_model.eval()
+                print("CNN Model loaded")
+            else:
+                print(" Model path not valid.")
+                return 
+
+            #  After model loads, update the vehicle dropdown if it already exists
+            if hasattr(self, "vehicle_menu") and self.vehicle_menu:
+                self.vehicle_menu.configure(values=self.class_labels)
+                if self.class_labels:
+                    self.selected_label.set(self.class_labels[0])  # Auto-select first class
+                print("Updated vehicle ComboBox with new class labels.")
+            else:
+                print("vehicle_menu not initialized yet — will show new labels on next UI refresh.")
+
+        except Exception as e:
+            print(f"Failed to load downloaded model: {e}")
     def __init__(self, root):
         self.root = root
         self.root.title("Vehicle Tracker")
         self.current_mode = tk.StringVar(value="autonomous")
 
         #create instance of guiComponents for race info and model download, and also pass in s3 client for upload
-        self.race_info_section = guiComponents.ModelInfoComponents(self, on_model_download_success=update_globals)
+        self.race_info_section = guiComponents.ModelInfoComponents(self, on_model_download_success=self.on_model_download_success)
         self.s3 = self.race_info_section.s3
 
         #create a thread locker for recording
@@ -91,9 +125,6 @@ class VehicleTrackerApp:
         self.video_label = Label(self.root)
         self.video_label.pack()
 
-        # Load configuration and models
-        yaml_data = load_yaml("./config/config_b490dad8.yaml")
-        self.class_labels, num_classes = parse_class_data(yaml_data)
         
         # Set up device
         cudnn.benchmark = True
@@ -103,23 +134,20 @@ class VehicleTrackerApp:
         print("Loading YOLOv5su model...")
         self.yolov9_model = YOLO("./yoloModels/yolov5su.pt").to(self.device)
 
-        #TODO: use later on jetson to test
-        # print("Loading YOLOv5su model...")
-        # self.yolov9_model = YOLO("./config/yolov5su.pt").to(self.device)
-
-        # # Export to TensorRT engine
-        # print("Exporting model to TensorRT engine...")
-        # self.yolov9_model.export(format="engine", device="cuda", half=True)
-
-        # self.yolov9_model = YOLO("yolov5su.engine")
-
         
-        print("Loading classification model...")
-        self.classification_model = models.resnet18(weights='IMAGENET1K_V1')
-        self.classification_model.fc = nn.Linear(self.classification_model.fc.in_features, num_classes)
-        self.classification_model.load_state_dict(torch.load("./config/best.pt"))
-        self.classification_model.to(self.device)
-        self.classification_model.eval()
+        # Load configuration and models
+        # yaml_data = load_yaml("./config/config_b490dad8.yaml")
+        # self.class_labels, num_classes = parse_class_data(yaml_data)
+
+        # print("Loading classification model...")
+        # self.classification_model = models.resnet18(weights='IMAGENET1K_V1')
+        # self.classification_model.fc = nn.Linear(self.classification_model.fc.in_features, num_classes)
+        # self.classification_model.load_state_dict(torch.load("./config/best.pt"))
+        # self.classification_model.to(self.device)
+        # self.classification_model.eval()
+
+        self.class_labels = []
+        self.classification_model = None
         
         # Image transformation
         self.transform = transforms.Compose([
@@ -497,20 +525,49 @@ class VehicleTrackerApp:
             self.cap.release()
         cv2.destroyAllWindows()
 
-        # #delete video if it exists
-        # try:
-        #     video_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "VideoOutputs", "output.mp4")
-        #     video_path = os.path.normpath(video_path)
+        # --- Delete .yaml and .pt files in ./config/ ---
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            config_dir = os.path.join(script_dir, "..", "config")
+            config_dir = os.path.normpath(config_dir)
 
-        #     if os.path.exists(video_path):
-        #         os.remove(video_path)
-        #         messagebox.showinfo("Success: ",f"Deleted video: {video_path}")
-        #     else:
-        #         messagebox.showwarning("Warning:","No video found to delete.")
-        # except Exception as e:
-        #     messagebox.showerror("Error:",f"Error deleting video: {e}")
+            if os.path.exists(config_dir) and os.path.isdir(config_dir):
+                yaml_files = glob.glob(os.path.join(config_dir, "*.yaml"))
+                pt_files = glob.glob(os.path.join(config_dir, "*.pt"))
 
-        # Close the app window
+                if not yaml_files and not pt_files:
+                    print("No .yaml or .pt files found in config directory.")
+                else:
+                    for file_path in yaml_files + pt_files:
+                        try:
+                            os.remove(file_path)
+                            print(f"Deleted config file: {file_path}")
+                        except Exception as file_err:
+                            print(f"Failed to delete {file_path}: {file_err}")
+            else:
+                print("Config directory does not exist.")
+
+        except Exception as e:
+            print(f"Error deleting config files: {e}")
+            messagebox.showerror("Error", f"Error deleting config files: {e}")
+
+        # --- Delete video if it exists ---
+        try:
+            video_path = os.path.join(script_dir, "..", "VideoOutputs", "output.mp4")
+            video_path = os.path.normpath(video_path)
+
+            print(f"Checking for video file at: {video_path}")
+
+            if os.path.exists(video_path):
+                os.remove(video_path)
+                print(f"Deleted video: {video_path}")
+            else:
+                print("No video file found.")
+        except Exception as e:
+            print(f"Error deleting video: {e}")
+            messagebox.showerror("Error", f"Error deleting video: {e}")
+
+        # --- Close the app window ---
         self.root.destroy()
 
 
