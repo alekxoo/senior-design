@@ -77,12 +77,12 @@ class ModelInfoComponents:
                 if len(parts) >= 3:
                     race_name = parts[1]
                     subfolder = parts[2]
-                    if subfolder in ['config', 'weights']:
+                    if subfolder in ['config', 'model']:
                         if race_name not in races:
                             races[race_name] = set()
                         races[race_name].add(subfolder)
 
-            valid_races = [race for race, folders in races.items() if {'config', 'weights'} <= folders]
+            valid_races = [race for race, folders in races.items() if {'config', 'model'} <= folders]
 
             if not valid_races:
                 messagebox.showinfo("No Valid Races", "No races with both config and weights found.")
@@ -104,7 +104,7 @@ class ModelInfoComponents:
             return
 
         config_key = f"{username}/{racename}/config/"
-        weights_key = f"{username}/{racename}/weights/"
+        weights_key = f"{username}/{racename}/model/"
 
         config_objects = s3.list_objects_v2(Bucket=bucket_name, Prefix=config_key)
         weights_objects = s3.list_objects_v2(Bucket=bucket_name, Prefix=weights_key)
