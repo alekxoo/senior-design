@@ -428,8 +428,8 @@ class VehicleTrackerApp:
             max_logit = max_logit.item()
             entropy = -torch.sum(probabilities * torch.log(probabilities + 1e-10)).item()
 
-            if max_logit < logit_threshold or entropy < entropy_threshold:
-                return f"Unknown ({max_logit:.2f}, entropy: {entropy:.2f})"
+            # if max_logit < logit_threshold or entropy < entropy_threshold:
+            #     return f"Unknown ({max_logit:.2f}, entropy: {entropy:.2f})"
             return f"{predicted_class_name} ({max_logit:.2f}, entropy: {entropy:.2f})"
 
     def update_frame(self):
@@ -474,7 +474,7 @@ class VehicleTrackerApp:
 
                             # Get classification result synchronously
                             classification_result = self.classify_vehicle(roi_tensor)
-                            vehicle_class_name = classification_result.split(" ")[0]  # Extract just the class name
+                            vehicle_class_name = classification_result.split(" (")[0]  # Extract just the class name
 
 
                             # Run classification in a separate thread
