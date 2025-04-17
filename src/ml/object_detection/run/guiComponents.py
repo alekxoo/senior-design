@@ -3,6 +3,7 @@ import boto3, os  # import libraries to run retrieve and upload functions to S3 
 from tkinter import messagebox
 import threading
 from dotenv import load_dotenv
+import yaml
 
 load_dotenv()
 
@@ -24,6 +25,12 @@ class ModelInfoComponents:
             aws_secret_access_key=os.getenv("S3_SECRET_ACCESS_KEY"),
             region_name=os.getenv("AWS_REGION_NAME")
         )
+
+    @staticmethod
+    def parse_class_data(data):
+        class_labels = [cls['label'] for cls in data['classes']]
+        num_classes = data['num_classes']
+        return class_labels, num_classes
 
     def create_model_section(self, container):
         """Creates the model browser section with username input"""
@@ -132,6 +139,25 @@ class ModelInfoComponents:
 
         if config_downloaded and weights_downloaded:
             messagebox.showinfo("Success", "Both model files downloaded successfully!")
+
+            try:
+                # Load YAML and parse it
+                import yaml
+                with open(config_filepath, 'r') as file:
+                    data = yaml.safe_load(file)
+                class_labels, num_classes = self.parse_class_data(data)
+
+                # Update race info panel
+                self.race_info.update_info({
+                    "Race Owner": username,
+                    "Race ID": racename,
+                    "Number of Cars": num_classes,
+                    "Car Names": ", ".join(class_labels),
+                })
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to parse YAML: {e}")
+
             if self.on_model_download_success:
                 self.on_model_download_success(
                 username,
@@ -151,11 +177,11 @@ class ModelInfoComponents:
         self.race_info = self.RaceInfoFrame(race_section)
         self.race_info.pack(fill="both", expand=True, padx=5, pady=5)
 
-        self.race_info.update_info({
-            "Race_ID": "Not loaded",
-            "Number of Cars": "Not loaded",
-            "Version Number": "Not loaded"
-        })
+        # self.race_info.update_info({
+        #     "Race_ID": "Not loaded",
+        #     "Number of Cars": "Not loaded",
+        #     "Version Number": "Not loaded"
+        # })
 
     class ModelListFrame(ctk.CTkScrollableFrame):
         """Custom scrollable frame for displaying race names with download buttons."""
