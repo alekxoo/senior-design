@@ -293,7 +293,7 @@ class VehicleTrackerApp:
             self.pan_slider.pack(fill="x", padx=10)
 
             ctk.CTkLabel(self.mode_content_frame, text="Tilt (Y-axis):").pack(pady=(10, 0))
-            self.tilt_slider = ctk.CTkSlider(self.mode_content_frame, from_=65, to=145, command=self.update_tilt)
+            self.tilt_slider = ctk.CTkSlider(self.mode_content_frame, from_=0, to=180, command=self.update_tilt)
             self.tilt_slider.set(servoReading)
             self.tilt_slider.pack(fill="x", padx=10)
                     

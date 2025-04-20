@@ -15,10 +15,18 @@ def vel_y(v):
 	t = threading.Thread(target=set_vel_y, args=(v,))
 	t.start()
 
+def readServo():
+	# This function is called in a separate thread to read the servo position
+	# It will block until the servo position is read
+	global servoReading
+	servoReading = f.get(SERVO_ADDR)
+
 def set_vel_y(v):
+	r = threading.Thread(target=readServo, args=())
+	r.start()
 	global servoReading
 	# old_r = f.get(SERVO_ADDR)
-	servoReading = max(65, min(145, int(servoReading + v))) #clamp between 0 and 95)
+	# servoReading = max(65, min(145, int(servoReading + v))) #clamp between 0 and 95)
 	f.set(SERVO_ADDR, servoReading, flag=0) #flag=0 means don't wait for response from device
 
 
