@@ -65,6 +65,9 @@ def gstreamer_pipeline(
         f"width=(int){capture_width}, height=(int){capture_height}, "
         f"format=(string)NV12, framerate=(fraction){framerate}/1"
     )
+
+def gestreamer_record_pipeline():
+    return """gst-launch-1.0 nvarguscamerasrc ! 'video/x-raw(memory:NVMM), width=1920, height=1080, format=NV12, framerate=60/1' ! tee name=t t. ! nvvidconv ! 'video/x-raw, format=I420' ! x264enc tune=zerolatency speed-preset=ultrafast ! h264parse ! qtmux ! queue ! filesink location=recording.mp4 -e t. ! nvvidconv ! "video/x-raw, width=1920, height=1080, format=(string)BGRx" ! videoconvert ! "video/x-raw, format=(string)BGR" ! queue ! appsink"""
     
     if record_file:
         # Pipeline with tee for both recording and viewing

@@ -69,8 +69,8 @@ class Focuser:
 
     def __init__(self, bus):
         try:
-            import smbus # sudo apt-get install python-smbus
-            self.bus = smbus.SMBus(bus)
+            import smbus2 # sudo apt-get install python-smbus
+            self.bus = smbus2.SMBus(bus)
         except:
             sys.exit(0)
         

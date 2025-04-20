@@ -484,6 +484,8 @@ class VehicleTrackerApp:
                 self.root.after(100, self.update_frame)
                 return
 
+            old_time = time.time()
+            
             # Scale down for inference to 480p
             img_resized = cv2.resize(img, (854, 480))
             img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
@@ -504,7 +506,7 @@ class VehicleTrackerApp:
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     conf = box.conf[0].item()
 
-                    if conf > 0.7:
+                    if conf > 0.3:
                         # Compute center coordinates
                         x_center, y_center = (x1 + x2) / (2*854) , (y1 + y2) / (2 * 480)
                         
@@ -558,6 +560,10 @@ class VehicleTrackerApp:
             
             if self.tracking_enabled:
                 PID(tracking_vehicle_x, tracking_vehicle_y, (1.0 / 60.0), vehicle_found)
+                new_time = time.time()
+                print(new_time - old_time)
+            else:
+                PID(0.0, 0.0, 0.0, False) #make sure reset timer is running always
 
             # Convert frame for Tkinter display
             frame_pil = Image.fromarray(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB))
