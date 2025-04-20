@@ -23,33 +23,72 @@ import sys
 # signal.signal(signal.SIGINT, signal_handler)
 
 
+# def gstreamer_pipeline(
+#     capture_width=1280,
+#     capture_height=720,
+#     display_width=640,
+#     display_height=360,
+#     framerate=60,
+#     flip_method=0,
+# ):
+#     return (
+#         "nvarguscamerasrc ! "
+#         "video/x-raw(memory:NVMM), "
+#         "width=(int)%d, height=(int)%d, "
+#         "format=(string)NV12, framerate=(fraction)%d/1 ! "
+#         "nvvidconv flip-method=%d ! "
+#         "video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! "
+#         "videoconvert ! "
+#         "video/x-raw, format=(string)BGR ! appsink"
+#         % (
+#             capture_width,
+#             capture_height,
+#             framerate,
+#             flip_method,
+#             display_width,
+#             display_height,
+#         )
+#     )
+
 def gstreamer_pipeline(
     capture_width=1280,
     capture_height=720,
     display_width=640,
     display_height=360,
-    framerate=60,
+    framerate=30,
     flip_method=0,
+    record_file=None,
 ):
-    return (
-        "nvarguscamerasrc ! "
-        "video/x-raw(memory:NVMM), "
-        "width=(int)%d, height=(int)%d, "
-        "format=(string)NV12, framerate=(fraction)%d/1 ! "
-        "nvvidconv flip-method=%d ! "
-        "video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! "
-        "videoconvert ! "
-        "video/x-raw, format=(string)BGR ! appsink"
-        % (
-            capture_width,
-            capture_height,
-            framerate,
-            flip_method,
-            display_width,
-            display_height,
-        )
+    base_pipeline = (
+        f"nvarguscamerasrc ! "
+        f"video/x-raw(memory:NVMM), "
+        f"width=(int){capture_width}, height=(int){capture_height}, "
+        f"format=(string)NV12, framerate=(fraction){framerate}/1"
     )
-
+    
+    if record_file:
+        # Pipeline with tee for both recording and viewing
+        return (
+            f"{base_pipeline} ! "
+            f"tee name=t ! "
+            f"queue ! nvvidconv ! video/x-raw, format=I420 ! "
+            f"x264enc tune=zerolatency speed-preset=ultrafast ! "
+            f"h264parse ! qtmux ! filesink location={record_file} "
+            f"t. ! queue ! nvvidconv flip-method={flip_method} ! "
+            f"video/x-raw, width=(int){display_width}, height=(int){display_height}, "
+            f"format=(string)BGRx ! videoconvert ! "
+            f"video/x-raw, format=(string)BGR ! appsink"
+        )
+    else:
+        # Original display-only pipeline
+        return (
+            f"{base_pipeline} ! "
+            f"nvvidconv flip-method={flip_method} ! "
+            f"video/x-raw, width=(int){display_width}, height=(int){display_height}, "
+            f"format=(string)BGRx ! videoconvert ! "
+            f"video/x-raw, format=(string)BGR ! appsink"
+        )
+    
 class FrameReader(threading.Thread):
     queues = []
     _running = True
@@ -107,7 +146,9 @@ class Camera(object):
         self.open_camera()
 
     def open_camera(self):
-        self.cap = cv2.VideoCapture(gstreamer_pipeline(flip_method=0), cv2.CAP_GSTREAMER)
+        # cap = cv2.VideoCapture(gstreamer_pipeline(), cv2.CAP_GSTREAMER)
+        cap = cv2.VideoCapture(gstreamer_pipeline(record_file="recording.mp4"), cv2.CAP_GSTREAMER)
+        # self.cap = cv2.VideoCapture(gstreamer_pipeline(flip_method=0), cv2.CAP_GSTREAMER)
         if not self.cap.isOpened():
             raise RuntimeError("Failed to open camera!")
         if self.frame_reader == None:
