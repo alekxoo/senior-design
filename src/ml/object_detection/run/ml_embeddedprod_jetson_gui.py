@@ -302,11 +302,6 @@ class VehicleTrackerApp:
             self.focus_slider.set(self.current_focus)
             self.focus_slider.pack(fill="x", padx=10)
         
-            ctk.CTkLabel(self.mode_content_frame, text="Focus:").pack(pady=(10, 0))
-            self.focus_slider = ctk.CTkSlider(self.mode_content_frame, from_=0, to=1000, command=self.update_focus)
-            self.focus_slider.set(self.current_focus)
-            self.focus_slider.pack(fill="x", padx=10)   
-
             ctk.CTkLabel(self.mode_content_frame, text="Zoom:").pack(pady=(10, 0))
             self.zoom_slider = ctk.CTkSlider(self.mode_content_frame, from_=0, to=1000, command=self.update_zoom)
             self.zoom_slider.set(self.current_zoom)
