@@ -54,7 +54,7 @@ def gstreamer_pipeline(
     display_height=360,
     framerate=30,
     flip_method=0,
-    record_file="i_want_to_sleep.mp4",
+    record_file="let_me_sleep.mp4",
 ):
     base_pipeline = (
         f"nvarguscamerasrc ! "
@@ -69,15 +69,16 @@ def gstreamer_pipeline(
             f"{base_pipeline} ! "
             f"tee name=t ! "
             f"queue ! nvvidconv ! video/x-raw, format=I420 ! "
-            f"x264enc tune=zerolatency speed-preset=ultrafast ! "
-            f"h264parse ! qtmux ! filesink location={record_file} "
+            f"x264enc tune=zerolatency bitrate=8000 speed-preset=ultrafast ! "
+            f"h264parse ! qtmux streamable=true ! "  # Added streamable=true
+            f"filesink location={record_file} sync=false "  # Added sync=false
             f"t. ! queue ! nvvidconv flip-method={flip_method} ! "
             f"video/x-raw, width=(int){display_width}, height=(int){display_height}, "
             f"format=(string)BGRx ! videoconvert ! "
             f"video/x-raw, format=(string)BGR ! appsink drop=1"
         )
     else:
-        # Display-only pipeline
+        # Original display-only pipeline
         return (
             f"{base_pipeline} ! "
             f"nvvidconv flip-method={flip_method} ! "
@@ -85,7 +86,6 @@ def gstreamer_pipeline(
             f"format=(string)BGRx ! videoconvert ! "
             f"video/x-raw, format=(string)BGR ! appsink drop=1"
         )
-    
 class VehicleTrackerApp:
     def on_model_download_success(self, username, racename, yaml_path=None, model_path=None):
         global USERNAME, RACENAME
@@ -596,6 +596,18 @@ class VehicleTrackerApp:
         if self.cap.isOpened():
             self.cap.release()
         cv2.destroyAllWindows()
+
+        if os.path.exists(video_path):
+            try:
+                import subprocess
+                fixed_file = video_path + ".fixed.mp4"
+                subprocess.run(['ffmpeg', '-i', video_path, '-c', 'copy', fixed_file], 
+                            stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+                os.remove(video_path)
+                os.rename(fixed_file, video_path)
+                print(f"Video file fixed: {video_path}")
+            except Exception as e:
+                print(f"Error fixing video file: {e}")
 
         # --- Delete .yaml and .pt files in ./config/ ---
         try:
