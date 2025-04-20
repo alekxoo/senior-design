@@ -302,6 +302,16 @@ class VehicleTrackerApp:
             self.focus_slider.set(self.current_focus)
             self.focus_slider.pack(fill="x", padx=10)
         
+            ctk.CTkLabel(self.mode_content_frame, text="Focus:").pack(pady=(10, 0))
+            self.focus_slider = ctk.CTkSlider(self.mode_content_frame, from_=0, to=1000, command=self.update_focus)
+            self.focus_slider.set(self.current_focus)
+            self.focus_slider.pack(fill="x", padx=10)   
+
+            ctk.CTkLabel(self.mode_content_frame, text="Zoom:").pack(pady=(10, 0))
+            self.zoom_slider = ctk.CTkSlider(self.mode_content_frame, from_=0, to=1000, command=self.update_zoom)
+            self.zoom_slider.set(self.current_zoom)
+            self.zoom_slider.pack(fill="x", padx=10)
+        
         elif self.current_mode.get() == "quit":
             self.on_closing()
 
@@ -321,6 +331,12 @@ class VehicleTrackerApp:
         focus_value = int(float(value))
         self.focuser.set(Focuser.OPT_FOCUS, focus_value)
         self.current_focus = focus_value
+
+    def update_zoom(self, value):
+        """Update camera zoom"""
+        zoom_value = int(float(value))
+        self.focuser.set(Focuser.OPT_ZOOM, zoom_value)
+        self.current_zoom = zoom_value
 
     def toggle_tracking(self):
         self.tracking_enabled = not self.tracking_enabled
