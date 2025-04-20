@@ -1,3 +1,9 @@
+import sys
+sys.path.append("/home/machvision/Documents/senior-design/src/embedded")
+from PIDControl import PID, PID_reset
+from ServoControl import vel_y, servoReading
+from StepperControl import vel_x
+from Focuser import Focuser
 import glob
 import torch
 import cv2
@@ -42,31 +48,43 @@ def parse_class_data(data):
     return class_labels, num_classes
 
 def gstreamer_pipeline(
-    capture_width=1920,
-    capture_height=1080,
+    capture_width=1280,
+    capture_height=720,
     display_width=640,
     display_height=360,
     framerate=60,
     flip_method=0,
+    record_file=True,
 ):
-    return (
-        "nvarguscamerasrc ! "
-        "video/x-raw(memory:NVMM), "
-        "width=(int)%d, height=(int)%d, "
-        "format=(string)NV12, framerate=(fraction)%d/1 ! "
-        "nvvidconv flip-method=%d ! "
-        "video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! "
-        "videoconvert ! "
-        "video/x-raw, format=(string)BGR ! appsink"
-        % (
-            capture_width,
-            capture_height,
-            framerate,
-            flip_method,
-            display_width,
-            display_height,
-        )
+    base_pipeline = (
+        f"nvarguscamerasrc ! "
+        f"video/x-raw(memory:NVMM), "
+        f"width=(int){capture_width}, height=(int){capture_height}, "
+        f"format=(string)NV12, framerate=(fraction){framerate}/1"
     )
+    
+    if record_file:
+        # Pipeline with tee for both recording and viewing
+        return (
+            f"{base_pipeline} ! "
+            f"tee name=t ! "
+            f"queue ! nvvidconv ! video/x-raw, format=I420 ! "
+            f"x264enc tune=zerolatency speed-preset=ultrafast ! "
+            f"h264parse ! qtmux ! filesink location={record_file} "
+            f"t. ! queue ! nvvidconv flip-method={flip_method} ! "
+            f"video/x-raw, width=(int){display_width}, height=(int){display_height}, "
+            f"format=(string)BGRx ! videoconvert ! "
+            f"video/x-raw, format=(string)BGR ! appsink drop=1"
+        )
+    else:
+        # Original display-only pipeline
+        return (
+            f"{base_pipeline} ! "
+            f"nvvidconv flip-method={flip_method} ! "
+            f"video/x-raw, width=(int){display_width}, height=(int){display_height}, "
+            f"format=(string)BGRx ! videoconvert ! "
+            f"video/x-raw, format=(string)BGR ! appsink drop=1"
+        )
 
 class VehicleTrackerApp:
     def on_model_download_success(self, username, racename, yaml_path=None, model_path=None):
@@ -263,15 +281,41 @@ class VehicleTrackerApp:
         
         elif self.current_mode.get() == "ptz":
             ctk.CTkLabel(self.mode_content_frame, text="PTZ Control", font=("Arial", 14)).pack()
-            ctk.CTkLabel(self.mode_content_frame, text="Pan:").pack()
-            ctk.CTkSlider(self.mode_content_frame, from_=0, to=100).pack(fill="x", padx=10)
-            ctk.CTkLabel(self.mode_content_frame, text="Tilt:").pack()
-            ctk.CTkSlider(self.mode_content_frame, from_=0, to=100).pack(fill="x", padx=10)
-            ctk.CTkLabel(self.mode_content_frame, text="Zoom:").pack()
-            ctk.CTkSlider(self.mode_content_frame, from_=0, to=100).pack(fill="x", padx=10)
+
+            ctk.CTkLabel(self.mode_content_frame, text="Pan (X-axis):").pack()
+            self.pan_slider = ctk.CTkSlider(self.mode_content_frame, from_=-1.0, to=1.0, command=self.update_pan)
+            self.pan_slider.set(0) 
+            self.pan_slider.pack(fill="x", padx=10)
+
+            ctk.CTkLabel(self.mode_content_frame, text="Tilt (Y-axis):").pack(pady=(10, 0))
+            self.tilt_slider = ctk.CTkSlider(self.mode_content_frame, from_=65, to=145, command=self.update_tilt)
+            self.tilt_slider.set(servoReading)
+            self.tilt_slider.pack(fill="x", padx=10)
+                    
+            ctk.CTkLabel(self.mode_content_frame, text="Focus:").pack(pady=(10, 0))
+            self.focus_slider = ctk.CTkSlider(self.mode_content_frame, from_=0, to=1000, command=self.update_focus)
+            self.focus_slider.set(self.current_focus)
+            self.focus_slider.pack(fill="x", padx=10)
         
         elif self.current_mode.get() == "quit":
             self.on_closing()
+
+    def update_pan(self, value):
+        print(f"Pan value: {value}")
+        vel_x(float(value))
+
+    def update_tilt(self, value):
+        global servoReading
+        diff = int(float(value) - servoReading)
+        
+        # Use the existing vel_y function to move
+        if diff != 0:
+            vel_y(diff)
+
+    def update_focus(self, value):
+        focus_value = int(float(value))
+        self.focuser.set(Focuser.OPT_FOCUS, focus_value)
+        self.current_focus = focus_value
 
     def toggle_tracking(self):
         self.tracking_enabled = not self.tracking_enabled

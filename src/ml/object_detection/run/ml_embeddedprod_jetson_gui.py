@@ -54,7 +54,7 @@ def gstreamer_pipeline(
     display_height=360,
     framerate=60,
     flip_method=0,
-    record_file=True,
+    record_file="real_ng.mp4",
 ):
     base_pipeline = (
         f"nvarguscamerasrc ! "
