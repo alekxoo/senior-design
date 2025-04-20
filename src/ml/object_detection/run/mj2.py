@@ -54,7 +54,7 @@ def gstreamer_pipeline(
     display_height=360,
     framerate=60,
     flip_method=0,
-    record_file=True,
+    record_file="RealNg.mp4",
 ):
     base_pipeline = (
         f"nvarguscamerasrc ! "
@@ -127,6 +127,7 @@ class VehicleTrackerApp:
 
         except Exception as e:
             print(f"Failed to load downloaded model: {e}")
+            
     def __init__(self, root):
         self.root = root
         self.root.title("Vehicle Tracker")
@@ -355,17 +356,18 @@ class VehicleTrackerApp:
                     self.video_writer = None
 
             self.record_button.configure(text="Start Recording")
+            
     def frame_grabber(self):
         t = time.time()
         while True:
             with self.lock:
                 ret, frame = self.cap.read()
-                if ret and self.is_recording and self.video_writer:
-                    self.temp_frames.append(frame)
-                    if len(self.temp_frames) > 0:
-                        for f in self.temp_frames:
-                            self.video_writer.write(f)
-                        self.temp_frames.clear()
+                # if ret and self.is_recording and self.video_writer:
+                #     self.temp_frames.append(frame)
+                #     if len(self.temp_frames) > 0:
+                #         for f in self.temp_frames:
+                #             self.video_writer.write(f)
+                #         self.temp_frames.clear()
             if ret:
                 self.newest_frame = frame
                 #call any functions that specifically need every frame here...
@@ -375,20 +377,17 @@ class VehicleTrackerApp:
 
 
 
-    def record_video(self, new_frame):
-        """Continuously records video frames in memory, estimates actual FPS, and initializes writer."""
+    # def record_video(self, new_frame):
+    #     """Continuously records video frames in memory, estimates actual FPS, and initializes writer."""
 
-        while  self.is_recording:
-            try:
-                with self.lock:
-                     if self.video_writer and self.is_recording:
-                        self.video_writer.write(new_frame)
+    #     while  self.is_recording:
+    #         try:
+    #             with self.lock:
+    #                  if self.video_writer and self.is_recording:
+    #                     self.video_writer.write(new_frame)
 
-            except Exception as e:
-                print(f"ERROR in recording thread: {e}")
-
-
-
+    #         except Exception as e:
+    #             print(f"ERROR in recording thread: {e}")
 
 
     def stop_recording(self):
