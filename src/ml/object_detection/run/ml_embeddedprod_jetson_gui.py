@@ -605,11 +605,14 @@ class VehicleTrackerApp:
 
         # Release camera
         if self.cap.isOpened():
-            print("Sending EOS to GStreamer pipeline...")
+            print("Releasing camera...")
             self.cap.release()
-            cv2.waitKey(1000)  # Small wait to allow EOS to propagate
-            cv2.destroyAllWindows()
 
+            print("Sending dummy EOS to help GStreamer finalize the recording...")
+            # Send a dummy EOS using a one-shot GStreamer pipeline with -e
+            os.system("gst-launch-1.0 -e fakesrc num-buffers=1 ! fakesink > /dev/null 2>&1")
+
+        cv2.destroyAllWindows()
 
         # --- Delete .yaml and .pt files in ./config/ ---
         try:
