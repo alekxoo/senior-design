@@ -1,5 +1,9 @@
-from ServoControl import vel_y, servoReading, f, SERVO_ADDR
+import sys
+sys.path.append("/home/machvision/Documents/senior-design/src/embedded")
+from PIDControl import PID, PID_reset
+from ServoControl import vel_y, servoReading
 from StepperControl import vel_x
+from Focuser import Focuser
 import glob
 import torch
 import cv2
@@ -111,6 +115,8 @@ class VehicleTrackerApp:
 
         except Exception as e:
             print(f"Failed to load downloaded model: {e}")
+
+
     def __init__(self, root):
         self.root = root
         self.root.title("Vehicle Tracker")
@@ -181,6 +187,14 @@ class VehicleTrackerApp:
         self.update_frame()
 
         #TODO: create instance of PTZ stuff
+
+        self.focuser = Focuser(7)  # Use the appropriate I2C bus number
+        self.focuser.set(Focuser.OPT_MODE, 0x01)  # Set to adjustment mode
+        self.current_focus = self.focuser.get(Focuser.OPT_FOCUS)
+        self.current_zoom = self.focuser.get(Focuser.OPT_ZOOM)
+        self.current_motor_x = self.focuser.get(Focuser.OPT_MOTOR_X)
+        self.current_motor_y = self.focuser.get(Focuser.OPT_MOTOR_Y)
+
 
     import customtkinter as ctk
 
@@ -266,13 +280,15 @@ class VehicleTrackerApp:
             self.pan_slider.set(0) 
             self.pan_slider.pack(fill="x", padx=10)
 
-            ctk.CTkLabel(self.mode_content_frame, text="Tilt:").pack()
-            self.tilt_slider = ctk.CTkSlider(self.mode_content_frame, from_=0, to=100, command=self.update_tilt)
+            ctk.CTkLabel(self.mode_content_frame, text="Tilt (Y-axis):").pack(pady=(10, 0))
+            self.tilt_slider = ctk.CTkSlider(self.mode_content_frame, from_=65, to=145, command=self.update_tilt)
+            self.tilt_slider.set(servoReading)
             self.tilt_slider.pack(fill="x", padx=10)
-            
-            ctk.CTkLabel(self.mode_content_frame, text="Zoom:").pack()
-            self.zoom_slider = ctk.CTkSlider(self.mode_content_frame, from_=0, to=100, command=self.update_zoom)
-            self.zoom_slider.pack(fill="x", padx=10)
+                    
+            ctk.CTkLabel(self.mode_content_frame, text="Focus:").pack(pady=(10, 0))
+            self.focus_slider = ctk.CTkSlider(self.mode_content_frame, from_=0, to=1000, command=self.update_focus)
+            self.focus_slider.set(self.current_focus)
+            self.focus_slider.pack(fill="x", padx=10)
         
         elif self.current_mode.get() == "quit":
             self.on_closing()
@@ -282,17 +298,18 @@ class VehicleTrackerApp:
         vel_x(float(value))
 
     def update_tilt(self, value):
-        print(f"Tilt value: {value}")
-        servo_pos = 65 + (float(value) * 80)
         global servoReading
-        diff = int(servo_pos - servoReading)
+        diff = int(float(value) - servoReading)
         
+        # Use the existing vel_y function to move
         if diff != 0:
             vel_y(diff)
 
-    def update_zoom(self, value):
-        print(f"Zoom value: {value}")
-        
+    def update_focus(self, value):
+        focus_value = int(float(value))
+        self.focuser.set(Focuser.OPT_FOCUS, focus_value)
+        self.current_focus = focus_value
+
     def toggle_tracking(self):
         self.tracking_enabled = not self.tracking_enabled
         self.track_button.configure(text="Stop Tracking" if self.tracking_enabled else "Start Tracking")
