@@ -613,18 +613,6 @@ class VehicleTrackerApp:
             self.cap.release()
         cv2.destroyAllWindows()
 
-        if os.path.exists(video_path):
-            try:
-                import subprocess
-                fixed_file = video_path + ".fixed.mp4"
-                subprocess.run(['ffmpeg', '-i', video_path, '-c', 'copy', fixed_file], 
-                            stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-                os.remove(video_path)
-                os.rename(fixed_file, video_path)
-                print(f"Video file fixed: {video_path}")
-            except Exception as e:
-                print(f"Error fixing video file: {e}")
-
         # --- Delete .yaml and .pt files in ./config/ ---
         try:
             script_dir = os.path.dirname(os.path.abspath(__file__))
