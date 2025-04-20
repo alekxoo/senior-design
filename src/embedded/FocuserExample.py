@@ -135,8 +135,8 @@ def parse_cmdline():
 def parseKey(k,focuser,auto_focus,camera):
     global image_count
     motor_step  = 5
-    focus_step  = 100
-    zoom_step   = 100
+    focus_step  = 5
+    zoom_step   = 5
     if k == ord('s'):
         focuser.set(Focuser.OPT_MOTOR_Y,focuser.get(Focuser.OPT_MOTOR_Y) + motor_step)
     elif k == ord('w'):

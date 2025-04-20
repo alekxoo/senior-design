@@ -5,10 +5,10 @@
 from ServoControl import vel_y
 from StepperControl import vel_x
 
-PX = 3.0
-IX = 1.5
+PX = 1.0
+IX = 0.1
 
-PY = -20.0
+PY = -10.0
 IY = 0.0
 
 i_x_acc = 0.0 #accumulated i_x value
