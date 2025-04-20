@@ -54,7 +54,7 @@ def gstreamer_pipeline(
     display_height=360,
     framerate=30,
     flip_method=0,
-    record_file=None,
+    record_file="i_want_to_sleep.mp4",
 ):
     base_pipeline = (
         f"nvarguscamerasrc ! "
