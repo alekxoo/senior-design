@@ -52,9 +52,9 @@ def gstreamer_pipeline(
     capture_height=720,
     display_width=640,
     display_height=360,
-    framerate=60,
+    framerate=30,
     flip_method=0,
-    record_file="real_ng.mp4",
+    record_file=None,
 ):
     base_pipeline = (
         f"nvarguscamerasrc ! "
@@ -77,7 +77,7 @@ def gstreamer_pipeline(
             f"video/x-raw, format=(string)BGR ! appsink drop=1"
         )
     else:
-        # Original display-only pipeline
+        # Display-only pipeline
         return (
             f"{base_pipeline} ! "
             f"nvvidconv flip-method={flip_method} ! "
@@ -85,7 +85,7 @@ def gstreamer_pipeline(
             f"format=(string)BGRx ! videoconvert ! "
             f"video/x-raw, format=(string)BGR ! appsink drop=1"
         )
-
+    
 class VehicleTrackerApp:
     def on_model_download_success(self, username, racename, yaml_path=None, model_path=None):
         global USERNAME, RACENAME
