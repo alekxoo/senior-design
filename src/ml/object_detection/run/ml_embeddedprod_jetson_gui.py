@@ -1,3 +1,5 @@
+from ServoControl import vel_y, servoReading, f, SERVO_ADDR
+from StepperControl import vel_x
 import glob
 import torch
 import cv2
@@ -258,16 +260,39 @@ class VehicleTrackerApp:
         
         elif self.current_mode.get() == "ptz":
             ctk.CTkLabel(self.mode_content_frame, text="PTZ Control", font=("Arial", 14)).pack()
-            ctk.CTkLabel(self.mode_content_frame, text="Pan:").pack()
-            ctk.CTkSlider(self.mode_content_frame, from_=0, to=100).pack(fill="x", padx=10)
+
+            ctk.CTkLabel(self.mode_content_frame, text="Pan (X-axis):").pack()
+            self.pan_slider = ctk.CTkSlider(self.mode_content_frame, from_=-1.0, to=1.0, command=self.update_pan)
+            self.pan_slider.set(0) 
+            self.pan_slider.pack(fill="x", padx=10)
+
             ctk.CTkLabel(self.mode_content_frame, text="Tilt:").pack()
-            ctk.CTkSlider(self.mode_content_frame, from_=0, to=100).pack(fill="x", padx=10)
+            self.tilt_slider = ctk.CTkSlider(self.mode_content_frame, from_=0, to=100, command=self.update_tilt)
+            self.tilt_slider.pack(fill="x", padx=10)
+            
             ctk.CTkLabel(self.mode_content_frame, text="Zoom:").pack()
-            ctk.CTkSlider(self.mode_content_frame, from_=0, to=100).pack(fill="x", padx=10)
+            self.zoom_slider = ctk.CTkSlider(self.mode_content_frame, from_=0, to=100, command=self.update_zoom)
+            self.zoom_slider.pack(fill="x", padx=10)
         
         elif self.current_mode.get() == "quit":
             self.on_closing()
 
+    def update_pan(self, value):
+        print(f"Pan value: {value}")
+        vel_x(float(value))
+
+    def update_tilt(self, value):
+        print(f"Tilt value: {value}")
+        servo_pos = 65 + (float(value) * 80)
+        global servoReading
+        diff = int(servo_pos - servoReading)
+        
+        if diff != 0:
+            vel_y(diff)
+
+    def update_zoom(self, value):
+        print(f"Zoom value: {value}")
+        
     def toggle_tracking(self):
         self.tracking_enabled = not self.tracking_enabled
         self.track_button.configure(text="Stop Tracking" if self.tracking_enabled else "Start Tracking")
