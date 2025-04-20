@@ -316,11 +316,11 @@ class VehicleTrackerApp:
             self.on_closing()
 
     def update_pan(self, value):
-        print(f"Pan value: {value}")
         vel_x(float(value))
 
     def update_tilt(self, value):
         global servoReading
+        print("Tilt GUI Reading: ", value)
         diff = int(float(value) - servoReading)
         
         # Use the existing vel_y function to move
