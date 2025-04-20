@@ -52,7 +52,7 @@ def gstreamer_pipeline(
     capture_height=720,
     display_width=640,
     display_height=360,
-    framerate=30,
+    framerate=60,
     flip_method=0,
     record_file=True,
 ):
@@ -74,7 +74,7 @@ def gstreamer_pipeline(
             f"t. ! queue ! nvvidconv flip-method={flip_method} ! "
             f"video/x-raw, width=(int){display_width}, height=(int){display_height}, "
             f"format=(string)BGRx ! videoconvert ! "
-            f"video/x-raw, format=(string)BGR ! appsink"
+            f"video/x-raw, format=(string)BGR ! appsink drop=1"
         )
     else:
         # Original display-only pipeline
@@ -83,7 +83,7 @@ def gstreamer_pipeline(
             f"nvvidconv flip-method={flip_method} ! "
             f"video/x-raw, width=(int){display_width}, height=(int){display_height}, "
             f"format=(string)BGRx ! videoconvert ! "
-            f"video/x-raw, format=(string)BGR ! appsink"
+            f"video/x-raw, format=(string)BGR ! appsink drop=1"
         )
 
 class VehicleTrackerApp:
