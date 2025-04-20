@@ -71,7 +71,7 @@ def gstreamer_pipeline(
             f"queue ! nvvidconv ! video/x-raw, format=I420 ! "
             f"x264enc tune=zerolatency bitrate=8000 speed-preset=ultrafast ! "
             f"h264parse ! qtmux streamable=true ! "  # Added streamable=true
-            f"filesink location={record_file} async=false sync=true "  # Added sync=false
+            f"filesink location={record_file} sync=false "  # Added sync=false
             f"t. ! queue ! nvvidconv flip-method={flip_method} ! "
             f"video/x-raw, width=(int){display_width}, height=(int){display_height}, "
             f"format=(string)BGRx ! videoconvert ! "
@@ -605,11 +605,7 @@ class VehicleTrackerApp:
 
         # Release camera
         if self.cap.isOpened():
-            print("Releasing video capture...")
             self.cap.release()
-            time.sleep(1.0)  # Give GStreamer time to flush the recording
-            # os.system("sync")  # Force file flush to disk (just in case)
-
         cv2.destroyAllWindows()
 
         # --- Delete .yaml and .pt files in ./config/ ---
