@@ -103,7 +103,7 @@ class VehicleTrackerApp:
         
         # Load models
         print("Loading YOLOv9s model...")
-        self.yolov9_model = YOLO("./yoloModels/yolov9s.pt").to(self.device)
+        self.yolov9_model = YOLO("./yoloModels/yolov8s.pt").to(self.device)
 
         # Load configuration and models
         # yaml_data = load_yaml("./config/config_b490dad8.yaml")
@@ -429,7 +429,7 @@ class VehicleTrackerApp:
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     conf = box.conf[0].item()
 
-                    if conf > 0.7:
+                    if conf > 0.3:
                         # Compute center coordinates
                         x_center, y_center = (x1 + x2) / 2*854 , (y1 + y2) / 2 * 480
 
